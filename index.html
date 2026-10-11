@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DER-Viewer — Universal Interactive Database ERD Platform</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-canvas: #070B12;
+            --bg-panel: rgba(15, 23, 42, 0.88);
+            --bg-panel-solid: #0F172A;
+            --bg-card: #1E293B;
+            --border-panel: rgba(56, 189, 248, 0.2);
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --accent-cyan: #38BDF8;
+            --accent-emerald: #10B981;
+            --accent-amber: #F59E0B;
+            --accent-purple: #A855F7;
+            --accent-rose: #F43F5E;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-canvas);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text-primary);
+        }
+
+        /* Subtle grid background */
+        #viewport-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            cursor: grab;
+            background-color: var(--bg-canvas);
+            background-image: 
+                radial-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+                radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px, 8px 8px;
+            background-position: 0 0, 20px 20px;
+        }
+
+        #viewport-container.panning {
+            cursor: grabbing !important;
+        }
+
+        #canvas-plane {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            will-change: transform;
+            transition: transform 0.05s ease-out;
+        }
+
+        #canvas-plane svg {
+            overflow: visible;
+            filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.7));
+        }
+
+        /* Top HUD Bar */
+        .hud-topbar {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            height: 56px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-panel);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 50;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            gap: 12px;
+        }
+
+        .brand-zone {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .brand-badge {
+            background: linear-gradient(135deg, #0284C7, #06B6D4);
+            color: #FFF;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .brand-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #FFF;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Diagram Model Selector */
+        .model-select {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: var(--accent-cyan);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .model-select:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(30, 41, 59, 1);
+        }
+
+        /* Search & Filter zone */
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 260px;
+            flex-shrink: 1;
+        }
+
+        .search-input {
+            width: 100%;
+            height: 36px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 8px;
+            padding: 0 12px 0 34px;
+            font-size: 13px;
+            color: #FFF;
+            outline: none;
+            transition: all 0.2s;
+            font-family: inherit;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+            background: rgba(15, 23, 42, 1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .filter-chips {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow-x: auto;
+            max-width: 480px;
+            scrollbar-width: none;
+        }
+        .filter-chips::-webkit-scrollbar { display: none; }
+
+        .chip-btn {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 10px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .chip-btn:hover {
+            background: rgba(56, 189, 248, 0.15);
+            color: #FFF;
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .chip-btn.active {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        /* Floating Zoom Controls */
+        .zoom-controls {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-panel);
+            border-radius: 12px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 50;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+        }
+
+        .ctrl-btn {
+            width: 38px;
+            height: 38px;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 8px;
+            color: #FFF;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(56, 189, 248, 0.25);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            transform: scale(1.05);
+        }
+
+        .zoom-badge {
+            font-family: 'Fira Code', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            text-align: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            margin-bottom: 2px;
+        }
+
+        /* Mini Quick Help / Shortcuts */
+        .quick-help {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-panel);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 50;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .kbd {
+            background: #1E293B;
+            border: 1px solid #334155;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 10px;
+            color: #E2E8F0;
+        }
+
+        /* Entity Inspector Sidebar */
+        #inspector-drawer {
+            position: fixed;
+            top: 84px;
+            right: -420px;
+            width: 400px;
+            bottom: 24px;
+            background: var(--bg-panel-solid);
+            border: 1px solid var(--border-panel);
+            border-radius: 14px;
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
+            z-index: 60;
+            transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #inspector-drawer.open {
+            right: 14px;
+        }
+
+        .drawer-header {
+            padding: 16px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #FFF;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .drawer-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 20px;
+            transition: color 0.15s;
+        }
+        .drawer-close:hover { color: #FFF; }
+
+        .drawer-content {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+            font-size: 13px;
+        }
+
+        /* Editor / Load Modal */
+        #editor-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(7, 11, 18, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-card {
+            width: 800px;
+            max-width: 90vw;
+            height: 600px;
+            max-height: 85vh;
+            background: var(--bg-panel-solid);
+            border: 1px solid var(--border-panel);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .code-textarea {
+            flex: 1;
+            background: #070B12;
+            color: #38BDF8;
+            border: none;
+            outline: none;
+            padding: 16px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid rgba(148, 163, 184, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0284C7, #06B6D4);
+            border: none;
+            color: #FFF;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 8px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-canvas);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(56, 189, 248, 0.15);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Highlighting and Filtering classes */
+        .entity-box {
+            transition: opacity 0.3s, filter 0.3s;
+            cursor: pointer;
+        }
+
+        .dimmed {
+            opacity: 0.15 !important;
+            filter: grayscale(80%) blur(1px);
+        }
+
+        .highlighted rect {
+            stroke: #38BDF8 !important;
+            stroke-width: 4px !important;
+            filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.9)) !important;
+        }
+
+        /* Mermaid ER Diagram Dark Mode Overrides (Eliminates White Rows) */
+        svg .er.entityBox {
+            fill: #0F172A !important;
+            stroke: #38BDF8 !important;
+            stroke-width: 2px !important;
+        }
+
+        svg .er.attributeBoxOdd {
+            fill: #0B1120 !important;
+            stroke: rgba(56, 189, 248, 0.25) !important;
+            stroke-width: 1px !important;
+        }
+
+        svg .er.attributeBoxEven {
+            fill: #111827 !important;
+            stroke: rgba(56, 189, 248, 0.25) !important;
+            stroke-width: 1px !important;
+        }
+
+        svg g[id^="entity-"] text {
+            fill: #E2E8F0 !important;
+            font-family: 'Fira Code', 'Inter', monospace !important;
+            font-size: 12px !important;
+        }
+
+        svg .er.entityLabel {
+            fill: #38BDF8 !important;
+            font-family: 'Inter', sans-serif !important;
+            font-weight: 700 !important;
+            font-size: 13.5px !important;
+            letter-spacing: -0.01em !important;
+        }
+
+        svg .er.relationshipLine {
+            stroke: #38BDF8 !important;
+            stroke-width: 1.5px !important;
+            opacity: 0.75;
+        }
+
+        svg .er.relationshipLabelBox {
+            fill: #0F172A !important;
+            stroke: rgba(56, 189, 248, 0.4) !important;
+        }
+
+        svg .er.relationshipLabel {
+            fill: #94A3B8 !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-msg" style="font-weight:600; font-size:15px; color:#F8FAFC;">Inicializando DER-Viewer...</div>
+        <div style="font-size:12px; color:#64748B; margin-top:6px;">Universal Interactive Database ERD Platform</div>
+    </div>
+
+    <!-- Top Floating Toolbar -->
+    <header class="hud-topbar">
+        <div class="brand-zone">
+            <span class="brand-badge">DER-VIEWER</span>
+            <select id="model-selector" class="model-select" onchange="onModelChange(this.value)">
+                <option value="saas">SaaS Cloud Platform (Demo 18 Tablas)</option>
+                <option value="ecommerce">E-Commerce & Logística (Demo Retail)</option>
+                <option value="custom">[Cargar / Pegar Personalizado...]</option>
+            </select>
+        </div>
+
+        <!-- Dynamic Filter Chips -->
+        <div id="filter-chips-container" class="filter-chips">
+            <!-- Dynamically generated based on parsed schemas -->
+        </div>
+
+        <!-- Search Input -->
+        <div class="search-box">
+            <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="entity-search" class="search-input" placeholder="Buscar tabla o campo..." oninput="handleSearch(this.value)">
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex; gap:8px;">
+            <button class="chip-btn" onclick="openEditorModal()" title="Pegar código Mermaid o cargar archivo">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                Cargar / Editar
+            </button>
+            <button class="chip-btn" onclick="exportSvg()" title="Descargar como archivo Vectorial SVG puro">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Exportar SVG
+            </button>
+            <button class="chip-btn" onclick="copyMermaidCode()" title="Copiar código Mermaid al portapapeles">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                Copiar
+            </button>
+        </div>
+    </header>
+
+    <!-- Canvas Viewport -->
+    <div id="viewport-container">
+        <div id="canvas-plane">
+            <div id="mermaid-root" class="mermaid"></div>
+        </div>
+    </div>
+
+    <!-- Floating Zoom HUD -->
+    <div class="zoom-controls">
+        <div id="zoom-val" class="zoom-badge">100%</div>
+        <button class="ctrl-btn" onclick="zoomIn()" title="Acercar [ + ]">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="zoomOut()" title="Alejar [ - ]">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="fitView()" title="Ajustar a Pantalla [ F ]">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        </button>
+        <button class="ctrl-btn" onclick="resetView()" title="Restablecer 100% [ 0 ]">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+    </div>
+
+    <!-- Bottom Shortcuts Guide -->
+    <div class="quick-help">
+        <div class="shortcut-item"><span class="kbd">Rueda del Mouse</span> Zoom focal infinito (5% - 3500%)</div>
+        <div class="shortcut-item"><span class="kbd">Click + Arrastrar</span> Desplazar (Pan)</div>
+        <div class="shortcut-item"><span class="kbd">Click en Tabla</span> Inspeccionar Entidad</div>
+        <div class="shortcut-item"><span class="kbd">F</span> Auto-Ajustar</div>
+        <div class="shortcut-item"><span class="kbd">0</span> 100% Original</div>
+    </div>
+
+    <!-- Entity Inspector Drawer -->
+    <div id="inspector-drawer">
+        <div class="drawer-header">
+            <div class="drawer-title">
+                <span class="dot" style="background:var(--accent-cyan);"></span>
+                <span id="drawer-table-name">Tabla</span>
+            </div>
+            <button class="drawer-close" onclick="closeInspector()">&times;</button>
+        </div>
+        <div class="drawer-content" id="drawer-body">
+            <!-- Dynamic entity details -->
+        </div>
+    </div>
+
+    <!-- Modal to Paste / Upload Mermaid Code -->
+    <div id="editor-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="font-weight:700; font-size:15px; color:#FFF;">Cargar / Pegar Diagrama Mermaid ERD</div>
+                <button class="drawer-close" onclick="closeEditorModal()">&times;</button>
+            </div>
+            <textarea id="modal-textarea" class="code-textarea" placeholder="Pega aquí el código 'erDiagram ...'"></textarea>
+            <div class="modal-footer">
+                <div>
+                    <input type="file" id="file-uploader" accept=".mmd,.mermaid,.txt" style="display:none;" onchange="handleFileUpload(event)">
+                    <button class="chip-btn" onclick="document.getElementById('file-uploader').click()">
+                        📁 Cargar Archivo (.mmd)
+                    </button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="chip-btn" onclick="closeEditorModal()">Cancelar</button>
+                    <button class="btn-primary" onclick="applyCustomDiagram()">Renderizar Diagrama</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models Preset Data -->
+    <script>
+        const PRESETS = {
+            saas: `erDiagram
+    %% ESQUEMA AUTH
+    auth_users["auth.users"] {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        boolean email_verified
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    auth_roles["auth.roles"] {
+        uuid id PK
+        varchar code UK
+        varchar name
+        text description
+    }
+
+    auth_permissions["auth.permissions"] {
+        uuid id PK
+        varchar code UK
+        varchar module
+        text description
+    }
+
+    auth_role_permissions["auth.role_permissions"] {
+        uuid role_id PK_FK
+        uuid permission_id PK_FK
+    }
+
+    auth_user_sessions["auth.user_sessions"] {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK
+        varchar ip_address
+        varchar user_agent
+        timestamptz expires_at
+        timestamptz created_at
+    }
+
+    %% ESQUEMA TENANTS
+    tenants_organization["tenants.organization"] {
+        uuid id PK
+        varchar slug UK
+        varchar name
+        varchar plan_tier
+        uuid owner_user_id FK
+        jsonb settings
+        timestamptz created_at
+    }
+
+    tenants_membership["tenants.membership"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        uuid role_id FK
+        varchar status
+        timestamptz joined_at
+    }
+
+    tenants_team["tenants.team"] {
+        uuid id PK
+        uuid organization_id FK
+        varchar name
+        text description
+    }
+
+    tenants_team_member["tenants.team_member"] {
+        uuid team_id PK_FK
+        uuid membership_id PK_FK
+    }
+
+    %% ESQUEMA BILLING
+    billing_plan["billing.plan"] {
+        uuid id PK
+        varchar code UK
+        varchar name
+        numeric price_monthly
+        numeric price_yearly
+        jsonb features_quota
+        boolean is_active
+    }
+
+    billing_subscription["billing.subscription"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid plan_id FK
+        varchar status
+        varchar billing_cycle
+        timestamptz current_period_start
+        timestamptz current_period_end
+        timestamptz cancel_at
+    }
+
+    billing_invoice["billing.invoice"] {
+        uuid id PK
+        uuid subscription_id FK
+        varchar invoice_number UK
+        numeric amount_due
+        numeric amount_paid
+        varchar currency
+        varchar status
+        timestamptz issued_at
+        timestamptz paid_at
+    }
+
+    %% ESQUEMA PROJECTS
+    projects_workspace["projects.workspace"] {
+        uuid id PK
+        uuid organization_id FK
+        varchar name
+        varchar visibility
+        uuid created_by_membership_id FK
+        timestamptz created_at
+    }
+
+    projects_project["projects.project"] {
+        uuid id PK
+        uuid workspace_id FK
+        varchar key UK
+        varchar name
+        varchar status
+        numeric budget
+        timestamptz deadline
+    }
+
+    projects_task["projects.task"] {
+        uuid id PK
+        uuid project_id FK
+        varchar task_number UK
+        varchar title
+        text description
+        varchar priority
+        varchar status
+        uuid assignee_membership_id FK
+        timestamptz due_date
+        timestamptz created_at
+    }
+
+    projects_tag["projects.tag"] {
+        uuid id PK
+        uuid workspace_id FK
+        varchar name
+        varchar color_hex
+    }
+
+    projects_task_tags["projects.task_tags"] {
+        uuid task_id PK_FK
+        uuid tag_id PK_FK
+    }
+
+    %% ESQUEMA AUDIT
+    audit_activity_log["audit.activity_log"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        varchar event_type
+        varchar entity_type
+        uuid entity_id
+        jsonb metadata
+        timestamptz timestamp
+    }
+
+    %% RELACIONES
+    auth_roles ||--o{ auth_role_permissions : "role_id"
+    auth_permissions ||--o{ auth_role_permissions : "permission_id"
+    auth_users ||--o{ auth_user_sessions : "user_id"
+    auth_users ||--o{ tenants_organization : "owner_user_id"
+    auth_users ||--o{ tenants_membership : "user_id"
+    auth_roles ||--o{ tenants_membership : "role_id"
+
+    tenants_organization ||--o{ tenants_membership : "organization_id"
+    tenants_organization ||--o{ tenants_team : "organization_id"
+    tenants_organization ||--o{ billing_subscription : "organization_id"
+    tenants_organization ||--o{ projects_workspace : "organization_id"
+    tenants_organization ||--o{ audit_activity_log : "organization_id"
+
+    tenants_team ||--o{ tenants_team_member : "team_id"
+    tenants_membership ||--o{ tenants_team_member : "membership_id"
+    tenants_membership ||--o{ projects_workspace : "created_by_membership_id"
+    tenants_membership ||--o{ projects_task : "assignee_membership_id"
+
+    billing_plan ||--o{ billing_subscription : "plan_id"
+    billing_subscription ||--o{ billing_invoice : "subscription_id"
+
+    projects_workspace ||--o{ projects_project : "workspace_id"
+    projects_workspace ||--o{ projects_tag : "workspace_id"
+    projects_project ||--o{ projects_task : "project_id"
+    projects_task ||--o{ projects_task_tags : "task_id"
+    projects_tag ||--o{ projects_task_tags : "tag_id"`,
+
+            ecommerce: `erDiagram
+    users_customer["users.customer"] {
+        uuid id PK
+        varchar email UK
+        varchar full_name
+        varchar phone
+        timestamptz created_at
+    }
+
+    catalog_category["catalog.category"] {
+        uuid id PK
+        varchar slug UK
+        varchar name
+        text description
+    }
+
+    catalog_product["catalog.product"] {
+        uuid id PK
+        uuid category_id FK
+        varchar sku UK
+        varchar title
+        numeric price
+        int stock_quantity
+        boolean is_active
+    }
+
+    orders_order["orders.order"] {
+        uuid id PK
+        uuid customer_id FK
+        varchar order_number UK
+        varchar status
+        numeric total_amount
+        timestamptz placed_at
+    }
+
+    orders_order_item["orders.order_item"] {
+        uuid id PK
+        uuid order_id FK
+        uuid product_id FK
+        int quantity
+        numeric unit_price
+    }
+
+    billing_payment["billing.payment"] {
+        uuid id PK
+        uuid order_id FK
+        varchar provider
+        varchar payment_status
+        numeric amount
+        timestamptz paid_at
+    }
+
+    logistics_shipment["logistics.shipment"] {
+        uuid id PK
+        uuid order_id FK
+        varchar tracking_code UK
+        varchar carrier
+        varchar shipping_status
+        timestamptz dispatched_at
+        timestamptz delivered_at
+    }
+
+    catalog_category ||--o{ catalog_product : "category_id"
+    users_customer ||--o{ orders_order : "customer_id"
+    orders_order ||--o{ orders_order_item : "order_id"
+    catalog_product ||--o{ orders_order_item : "product_id"
+    orders_order ||--o| billing_payment : "order_id"
+    orders_order ||--o| logistics_shipment : "order_id"`
+        };
+
+        let currentMermaidCode = PRESETS.saas;
+    </script>
+
+    <!-- Core App Logic -->
+    <script>
+        let scale = 1.0;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        const container = document.getElementById('viewport-container');
+        const plane = document.getElementById('canvas-plane');
+        const rootDiv = document.getElementById('mermaid-root');
+        const zoomValBadge = document.getElementById('zoom-val');
+
+        // Mermaid Setup
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: {
+                darkMode: true,
+                background: '#070B12',
+                primaryColor: '#0F172A',
+                primaryTextColor: '#F8FAFC',
+                primaryBorderColor: '#38BDF8',
+                lineColor: '#38BDF8',
+                secondaryColor: '#1E293B',
+                tertiaryColor: '#0F172A',
+                attributeBackgroundColorOdd: '#0B1120',
+                attributeBackgroundColorEven: '#111827',
+                attributeBoxBorderColor: 'rgba(56, 189, 248, 0.25)',
+                fontSize: '12px',
+                fontFamily: 'Inter, sans-serif'
+            },
+            er: {
+                useMaxWidth: false,
+                entityPadding: 16,
+                fill: '#0F172A',
+                stroke: '#38BDF8',
+                strokeWidth: 2
+            }
+        });
+
+        // Initialize application
+        window.addEventListener('DOMContentLoaded', () => {
+            renderDiagram(currentMermaidCode);
+        });
+
+        async function renderDiagram(code) {
+            const loader = document.getElementById('loading-overlay');
+            loader.style.display = 'flex';
+            loader.style.opacity = '1';
+
+            try {
+                rootDiv.innerHTML = '';
+                const { svg } = await mermaid.render('rendered-svg-' + Date.now(), code);
+                rootDiv.innerHTML = svg;
+
+                postProcessSvg();
+                generateDynamicFilters();
+                fitView();
+
+                setTimeout(() => {
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 300);
+                }, 150);
+
+            } catch (err) {
+                console.error("Render Error:", err);
+                loader.innerHTML = `
+                    <div style="color:#EF4444; font-weight:700; font-size:16px;">Error de sintaxis Mermaid:</div>
+                    <pre style="color:#CBD5E1; margin:12px 20px; font-size:12px; max-width:800px; white-space:pre-wrap;">${err.message || err}</pre>
+                    <button class="btn-primary" onclick="openEditorModal()">Corregir en el Editor</button>
+                `;
+            }
+        }
+
+        function postProcessSvg() {
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
+                svg.style.width = svg.viewBox.baseVal.width + 'px';
+                svg.style.height = svg.viewBox.baseVal.height + 'px';
+                svg.setAttribute('width', svg.viewBox.baseVal.width);
+                svg.setAttribute('height', svg.viewBox.baseVal.height);
+            } else {
+                const bbox = svg.getBBox();
+                if (bbox && bbox.width > 0) {
+                    svg.style.width = bbox.width + 'px';
+                    svg.style.height = bbox.height + 'px';
+                    svg.setAttribute('width', bbox.width);
+                    svg.setAttribute('height', bbox.height);
+                }
+            }
+            svg.style.maxWidth = 'none';
+            svg.style.display = 'block';
+
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+            entities.forEach(g => {
+                g.classList.add('entity-box');
+
+                // Enforce dark styling on row rectangles
+                const rects = g.querySelectorAll('rect');
+                rects.forEach((r, idx) => {
+                    if (idx === 0) {
+                        r.style.fill = '#0F172A';
+                        r.style.stroke = '#38BDF8';
+                        r.style.strokeWidth = '2px';
+                    } else if (idx % 2 === 1) {
+                        r.style.fill = '#0B1120';
+                        r.style.stroke = 'rgba(56, 189, 248, 0.2)';
+                    } else {
+                        r.style.fill = '#111827';
+                        r.style.stroke = 'rgba(56, 189, 248, 0.2)';
+                    }
+                });
+
+                // Style and color-code text nodes
+                const textNodes = g.querySelectorAll('text');
+                let tableName = '';
+                if (textNodes.length > 0) tableName = textNodes[0].textContent.trim();
+
+                textNodes.forEach((t, idx) => {
+                    if (idx === 0) {
+                        t.style.fill = '#38BDF8';
+                        t.style.fontWeight = '700';
+                        t.style.fontFamily = 'Inter, sans-serif';
+                        t.style.fontSize = '13.5px';
+                        return;
+                    }
+                    const val = t.textContent.trim();
+                    t.style.fontFamily = 'Fira Code, monospace';
+                    t.style.fontSize = '12px';
+
+                    if (val === 'PK' || val === 'PK_FK' || val === 'PK, FK') {
+                        t.style.fill = '#F59E0B';
+                        t.style.fontWeight = '700';
+                    } else if (val === 'FK') {
+                        t.style.fill = '#38BDF8';
+                        t.style.fontWeight = '700';
+                    } else if (val === 'UK') {
+                        t.style.fill = '#10B981';
+                        t.style.fontWeight = '700';
+                    } else if (['uuid', 'varchar', 'text', 'int', 'bigint', 'numeric', 'boolean', 'timestamptz', 'timestamp', 'jsonb', 'bytea'].includes(val.toLowerCase())) {
+                        t.style.fill = '#94A3B8';
+                        t.style.fontWeight = '400';
+                    } else {
+                        t.style.fill = '#F8FAFC';
+                        t.style.fontWeight = '500';
+                    }
+                });
+
+                const parts = tableName.split('.');
+                const schema = parts.length > 1 ? parts[0] : 'default';
+                g.setAttribute('data-schema', schema);
+                g.setAttribute('data-table', tableName);
+
+                // Click to inspect
+                g.onclick = (e) => {
+                    e.stopPropagation();
+                    inspectEntity(tableName, g);
+                };
+            });
+        }
+
+        function generateDynamicFilters() {
+            const container = document.getElementById('filter-chips-container');
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+            const schemas = new Set();
+            entities.forEach(g => {
+                const s = g.getAttribute('data-schema');
+                if (s) schemas.add(s);
+            });
+
+            const colors = ['var(--accent-emerald)', 'var(--accent-amber)', 'var(--accent-cyan)', 'var(--accent-purple)', 'var(--accent-rose)'];
+            let html = `
+                <button class="chip-btn active" onclick="filterDomain('all')">
+                    <span class="dot" style="background:#FFF;"></span> Todos (${entities.length})
+                </button>
+            `;
+
+            let colorIdx = 0;
+            schemas.forEach(s => {
+                const count = svg.querySelectorAll(`g[data-schema="${s}"]`).length;
+                const col = colors[colorIdx % colors.length];
+                colorIdx++;
+                html += `
+                    <button class="chip-btn" onclick="filterDomain('${s}')">
+                        <span class="dot" style="background:${col};"></span> ${s} (${count})
+                    </button>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Entity Inspection Drawer
+        function inspectEntity(tableName, entityGroup) {
+            const drawer = document.getElementById('inspector-drawer');
+            const title = document.getElementById('drawer-table-name');
+            const body = document.getElementById('drawer-body');
+
+            title.innerText = tableName;
+
+            const rows = entityGroup.querySelectorAll('text');
+            let colsHtml = '';
+            for (let i = 1; i < rows.length; i++) {
+                const line = rows[i].textContent.trim();
+                if (line) {
+                    let badge = '';
+                    if (line.includes('PK_FK')) badge = '<span class="kbd" style="color:var(--accent-amber);">PK FK</span>';
+                    else if (line.includes('PK')) badge = '<span class="kbd" style="color:var(--accent-amber);">PK</span>';
+                    else if (line.includes('FK')) badge = '<span class="kbd" style="color:var(--accent-cyan);">FK</span>';
+                    else if (line.includes('UK')) badge = '<span class="kbd" style="color:var(--accent-emerald);">UK</span>';
+
+                    colsHtml += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(148,163,184,0.08);">
+                            <span style="font-family:'Fira Code',monospace; font-size:12px; color:#E2E8F0;">${line}</span>
+                            ${badge}
+                        </div>
+                    `;
+                }
+            }
+
+            body.innerHTML = `
+                <div style="margin-bottom:16px;">
+                    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:8px;">Esquema y Dominio</div>
+                    <div style="font-weight:600; color:var(--accent-cyan); font-size:14px;">${tableName.split('.')[0] || 'default'}</div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:8px;">Campos y Restricciones</div>
+                    ${colsHtml || '<div style="color:var(--text-muted);">Sin detalles de columnas.</div>'}
+                </div>
+
+                <div style="margin-top:20px;">
+                    <button class="chip-btn" style="width:100%; justify-content:center;" onclick="copyTableDDL('${tableName}')">
+                        Copiar Nombre y Estructura
+                    </button>
+                </div>
+            `;
+
+            drawer.classList.add('open');
+        }
+
+        function closeInspector() {
+            document.getElementById('inspector-drawer').classList.remove('open');
+        }
+
+        function copyTableDDL(table) {
+            navigator.clipboard.writeText(table);
+            alert(`Identificador '${table}' copiado al portapapeles.`);
+        }
+
+        // Pan and Zoom engine
+        function updateTransform(smooth = false) {
+            plane.style.transition = smooth ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' : 'none';
+            plane.style.transform = `matrix(${scale}, 0, 0, ${scale}, ${translateX}, ${translateY})`;
+            zoomValBadge.innerText = `${Math.round(scale * 100)}%`;
+        }
+
+        container.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            container.classList.add('panning');
+            closeInspector();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform(false);
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            container.classList.remove('panning');
+        });
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+            const newScale = Math.min(Math.max(scale * zoomFactor, 0.05), 45.0);
+
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            translateX = mouseX - (mouseX - translateX) * (newScale / scale);
+            translateY = mouseY - (mouseY - translateY) * (newScale / scale);
+            scale = newScale;
+
+            updateTransform(false);
+        }, { passive: false });
+
+        function zoomIn() { scale = Math.min(scale * 1.3, 45.0); updateTransform(true); }
+        function zoomOut() { scale = Math.max(scale / 1.3, 0.05); updateTransform(true); }
+        function resetView() {
+            scale = 1.0;
+            translateX = (container.clientWidth - (plane.offsetWidth || 1200)) / 2;
+            translateY = 100;
+            updateTransform(true);
+        }
+
+        function fitView() {
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            let width = 0;
+            let height = 0;
+            let x = 0;
+            let y = 0;
+
+            if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
+                width = svg.viewBox.baseVal.width;
+                height = svg.viewBox.baseVal.height;
+                x = svg.viewBox.baseVal.x || 0;
+                y = svg.viewBox.baseVal.y || 0;
+            } else {
+                const bbox = svg.getBBox();
+                if (!bbox || bbox.width === 0 || bbox.height === 0) return;
+                width = bbox.width;
+                height = bbox.height;
+                x = bbox.x || 0;
+                y = bbox.y || 0;
+            }
+
+            if (width === 0 || height === 0) return;
+
+            const padding = 70;
+            const availableWidth = container.clientWidth - padding * 2;
+            const availableHeight = container.clientHeight - padding * 2 - 60;
+
+            const scaleX = availableWidth / width;
+            const scaleY = availableHeight / height;
+            scale = Math.min(scaleX, scaleY, 1.2);
+
+            translateX = (container.clientWidth - width * scale) / 2 - x * scale;
+            translateY = (container.clientHeight - height * scale) / 2 + 30 - y * scale;
+
+            updateTransform(true);
+        }
+
+        // Shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+            if (e.key === '+' || e.key === '=') zoomIn();
+            else if (e.key === '-' || e.key === '_') zoomOut();
+            else if (e.key === '0') resetView();
+            else if (e.key.toLowerCase() === 'f') fitView();
+            else if (e.key === 'Escape') { closeInspector(); closeEditorModal(); }
+        });
+
+        // Search & Filter
+        function handleSearch(term) {
+            const query = term.trim().toLowerCase();
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+            if (!query) {
+                entities.forEach(g => g.classList.remove('dimmed', 'highlighted'));
+                return;
+            }
+
+            entities.forEach(g => {
+                const text = g.textContent.toLowerCase();
+                if (text.includes(query)) {
+                    g.classList.remove('dimmed');
+                    g.classList.add('highlighted');
+                } else {
+                    g.classList.add('dimmed');
+                    g.classList.remove('highlighted');
+                }
+            });
+        }
+
+        function filterDomain(domain) {
+            document.querySelectorAll('#filter-chips-container .chip-btn').forEach(btn => btn.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+            if (domain === 'all') {
+                entities.forEach(g => g.classList.remove('dimmed'));
+                return;
+            }
+
+            entities.forEach(g => {
+                const s = g.getAttribute('data-schema');
+                if (s === domain) g.classList.remove('dimmed');
+                else g.classList.add('dimmed');
+            });
+        }
+
+        // Presets & Modal Editor
+        function onModelChange(val) {
+            if (val === 'custom') {
+                openEditorModal();
+            } else if (PRESETS[val]) {
+                currentMermaidCode = PRESETS[val];
+                renderDiagram(currentMermaidCode);
+            }
+        }
+
+        function openEditorModal() {
+            document.getElementById('modal-textarea').value = currentMermaidCode;
+            document.getElementById('editor-modal').style.display = 'flex';
+        }
+
+        function closeEditorModal() {
+            document.getElementById('editor-modal').style.display = 'none';
+        }
+
+        function applyCustomDiagram() {
+            const code = document.getElementById('modal-textarea').value;
+            if (!code.trim()) { alert("El código no puede estar vacío"); return; }
+            currentMermaidCode = code;
+            document.getElementById('model-selector').value = 'custom';
+            closeEditorModal();
+            renderDiagram(currentMermaidCode);
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('modal-textarea').value = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+
+        function exportSvg() {
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = url;
+            downloadLink.download = "database_erd_" + Date.now() + ".svg";
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function copyMermaidCode() {
+            navigator.clipboard.writeText(currentMermaidCode).then(() => {
+                alert("Código Mermaid copiado al portapapeles con éxito.");
+            });
+        }
+    </script>
+</body>
+</html>

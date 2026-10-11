@@ -1,0 +1,192 @@
+erDiagram
+    %% ESQUEMA AUTH
+    auth_users["auth.users"] {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        boolean email_verified
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    auth_roles["auth.roles"] {
+        uuid id PK
+        varchar code UK
+        varchar name
+        text description
+    }
+
+    auth_permissions["auth.permissions"] {
+        uuid id PK
+        varchar code UK
+        varchar module
+        text description
+    }
+
+    auth_role_permissions["auth.role_permissions"] {
+        uuid role_id PK_FK
+        uuid permission_id PK_FK
+    }
+
+    auth_user_sessions["auth.user_sessions"] {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK
+        varchar ip_address
+        varchar user_agent
+        timestamptz expires_at
+        timestamptz created_at
+    }
+
+    %% ESQUEMA TENANTS
+    tenants_organization["tenants.organization"] {
+        uuid id PK
+        varchar slug UK
+        varchar name
+        varchar plan_tier
+        uuid owner_user_id FK
+        jsonb settings
+        timestamptz created_at
+    }
+
+    tenants_membership["tenants.membership"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        uuid role_id FK
+        varchar status
+        timestamptz joined_at
+    }
+
+    tenants_team["tenants.team"] {
+        uuid id PK
+        uuid organization_id FK
+        varchar name
+        text description
+    }
+
+    tenants_team_member["tenants.team_member"] {
+        uuid team_id PK_FK
+        uuid membership_id PK_FK
+    }
+
+    %% ESQUEMA BILLING
+    billing_plan["billing.plan"] {
+        uuid id PK
+        varchar code UK
+        varchar name
+        numeric price_monthly
+        numeric price_yearly
+        jsonb features_quota
+        boolean is_active
+    }
+
+    billing_subscription["billing.subscription"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid plan_id FK
+        varchar status
+        varchar billing_cycle
+        timestamptz current_period_start
+        timestamptz current_period_end
+        timestamptz cancel_at
+    }
+
+    billing_invoice["billing.invoice"] {
+        uuid id PK
+        uuid subscription_id FK
+        varchar invoice_number UK
+        numeric amount_due
+        numeric amount_paid
+        varchar currency
+        varchar status
+        timestamptz issued_at
+        timestamptz paid_at
+    }
+
+    %% ESQUEMA PROJECTS
+    projects_workspace["projects.workspace"] {
+        uuid id PK
+        uuid organization_id FK
+        varchar name
+        varchar visibility
+        uuid created_by_membership_id FK
+        timestamptz created_at
+    }
+
+    projects_project["projects.project"] {
+        uuid id PK
+        uuid workspace_id FK
+        varchar key UK
+        varchar name
+        varchar status
+        numeric budget
+        timestamptz deadline
+    }
+
+    projects_task["projects.task"] {
+        uuid id PK
+        uuid project_id FK
+        varchar task_number UK
+        varchar title
+        text description
+        varchar priority
+        varchar status
+        uuid assignee_membership_id FK
+        timestamptz due_date
+        timestamptz created_at
+    }
+
+    projects_tag["projects.tag"] {
+        uuid id PK
+        uuid workspace_id FK
+        varchar name
+        varchar color_hex
+    }
+
+    projects_task_tags["projects.task_tags"] {
+        uuid task_id PK_FK
+        uuid tag_id PK_FK
+    }
+
+    %% ESQUEMA AUDIT
+    audit_activity_log["audit.activity_log"] {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        varchar event_type
+        varchar entity_type
+        uuid entity_id
+        jsonb metadata
+        timestamptz timestamp
+    }
+
+    %% RELACIONES
+    auth_roles ||--o{ auth_role_permissions : "role_id"
+    auth_permissions ||--o{ auth_role_permissions : "permission_id"
+    auth_users ||--o{ auth_user_sessions : "user_id"
+    auth_users ||--o{ tenants_organization : "owner_user_id"
+    auth_users ||--o{ tenants_membership : "user_id"
+    auth_roles ||--o{ tenants_membership : "role_id"
+
+    tenants_organization ||--o{ tenants_membership : "organization_id"
+    tenants_organization ||--o{ tenants_team : "organization_id"
+    tenants_organization ||--o{ billing_subscription : "organization_id"
+    tenants_organization ||--o{ projects_workspace : "organization_id"
+    tenants_organization ||--o{ audit_activity_log : "organization_id"
+
+    tenants_team ||--o{ tenants_team_member : "team_id"
+    tenants_membership ||--o{ tenants_team_member : "membership_id"
+    tenants_membership ||--o{ projects_workspace : "created_by_membership_id"
+    tenants_membership ||--o{ projects_task : "assignee_membership_id"
+
+    billing_plan ||--o{ billing_subscription : "plan_id"
+    billing_subscription ||--o{ billing_invoice : "subscription_id"
+
+    projects_workspace ||--o{ projects_project : "workspace_id"
+    projects_workspace ||--o{ projects_tag : "workspace_id"
+    projects_project ||--o{ projects_task : "project_id"
+    projects_task ||--o{ projects_task_tags : "task_id"
+    projects_tag ||--o{ projects_task_tags : "tag_id"

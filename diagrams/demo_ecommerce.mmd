@@ -1,0 +1,68 @@
+erDiagram
+    users_customer["users.customer"] {
+        uuid id PK
+        varchar email UK
+        varchar full_name
+        varchar phone
+        timestamptz created_at
+    }
+
+    catalog_category["catalog.category"] {
+        uuid id PK
+        varchar slug UK
+        varchar name
+        text description
+    }
+
+    catalog_product["catalog.product"] {
+        uuid id PK
+        uuid category_id FK
+        varchar sku UK
+        varchar title
+        numeric price
+        int stock_quantity
+        boolean is_active
+    }
+
+    orders_order["orders.order"] {
+        uuid id PK
+        uuid customer_id FK
+        varchar order_number UK
+        varchar status
+        numeric total_amount
+        timestamptz placed_at
+    }
+
+    orders_order_item["orders.order_item"] {
+        uuid id PK
+        uuid order_id FK
+        uuid product_id FK
+        int quantity
+        numeric unit_price
+    }
+
+    billing_payment["billing.payment"] {
+        uuid id PK
+        uuid order_id FK
+        varchar provider
+        varchar payment_status
+        numeric amount
+        timestamptz paid_at
+    }
+
+    logistics_shipment["logistics.shipment"] {
+        uuid id PK
+        uuid order_id FK
+        varchar tracking_code UK
+        varchar carrier
+        varchar shipping_status
+        timestamptz dispatched_at
+        timestamptz delivered_at
+    }
+
+    catalog_category ||--o{ catalog_product : "category_id"
+    users_customer ||--o{ orders_order : "customer_id"
+    orders_order ||--o{ orders_order_item : "order_id"
+    catalog_product ||--o{ orders_order_item : "product_id"
+    orders_order ||--o| billing_payment : "order_id"
+    orders_order ||--o| logistics_shipment : "order_id"
