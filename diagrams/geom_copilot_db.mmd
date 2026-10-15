@@ -1,0 +1,96 @@
+erDiagram
+    geom_projects["geom_projects (Proyecto 3D y Estado del Agente)"] {
+        varchar id PK "ID único de conversación y proyecto"
+        bigint tenant_id "ID de inquilino (default 0)"
+        bigint user_id "ID de usuario propietario (default 0)"
+        varchar mode "DESIGNER | LEARNER"
+        varchar project_name "Nombre del Proyecto"
+        text objective "Objetivo arquitectónico de la sesión"
+        varchar status "IDLE | RUNNING | COMPLETED | FAILED"
+        varchar model "Modelo LLM (gpt-6-luna)"
+        jsonb geom_memory "Memoria y contexto continuo sintetizado por el agente"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última actividad"
+    }
+
+    projects_history["projects_history (Últimas 10 Versiones por Proyecto)"] {
+        varchar project_id PK,FK "FK a geom_projects.id"
+        bigint version_id PK "1...n incremental independiente por proyecto"
+        varchar updated_by "USER | GEOM"
+        jsonb project_data "Snapshot del AST geométrico en esta versión"
+        timestamptz created_at "Momento del commit de la versión"
+    }
+
+    events_history["events_history (Historial de Mensajes / Eventos)"] {
+        varchar project_id PK,FK "FK a geom_projects.id"
+        int event_id PK "1...n secuencial independiente por proyecto"
+        varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
+        jsonb message "Contenido íntegro estructurado (text, thought, ops)"
+        jsonb metadata "Telemetría y consumo (tokens, cache, latency, model)"
+        timestamptz created_at "Timestamp del evento"
+    }
+
+    scene_snapshot["scene_snapshot (Instantánea 3D por Hilo)"] {
+        bigserial id PK "ID del snapshot"
+        varchar thread_id FK "FK a geom_projects.id"
+        bigint revision "Número de revisión 3D"
+        jsonb scene_data "Grafo geométrico completo"
+        timestamptz created_at "Timestamp del snapshot"
+    }
+
+    knowledge_category["knowledge_category (Taxonomía de Conocimiento)"] {
+        varchar id PK "Identificador único de categoría"
+        varchar parent_id FK "Autorreferencia jerárquica a categoría padre"
+        varchar path UK "Ruta canónica slug (/carpentry/tables)"
+        varchar name "Nombre de la categoría"
+        text summary "Resumen del dominio constructivo"
+        varchar status "DRAFT | PUBLISHED | DEPRECATED"
+        int version "Versión de la categoría"
+        varchar scope "GLOBAL | WORKSPACE | PROJECT"
+        text provenance "Autoría y fuente de las reglas"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Fecha de actualización"
+    }
+
+    knowledge_entry["knowledge_entry (Manifiestos y Reglas Paramétricas)"] {
+        varchar id PK "Identificador único de entrada"
+        varchar category_id FK "FK a knowledge_category.id"
+        varchar path UK "Ruta canónica única"
+        varchar name "Nombre de la regla o componente"
+        text summary "Resumen técnico de diseño"
+        jsonb content "Manifiesto geométrico y restricciones"
+        varchar status "DRAFT | PUBLISHED | ACTIVE"
+        int version "Versión de la regla"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Fecha de actualización"
+    }
+
+    knowledge_revision["knowledge_revision (Auditoría de Aprendizaje AI)"] {
+        bigserial id PK "ID secuencial de revisión"
+        varchar category_id "Referencia a categoría"
+        varchar entry_id "Referencia a entrada"
+        varchar path "Ruta en el momento de la revisión"
+        int version "Número de versión generada"
+        varchar status "Estado asignado"
+        text reason "Justificación del razonamiento sintetizado"
+        varchar source_thread_id "Hilo Learner que originó el cambio"
+        varchar model "Modelo que sintetizó el conocimiento"
+        jsonb content_snapshot "Snapshot completo del contenido JSONB"
+        timestamptz created_at "Momento de la revisión"
+    }
+
+    copilot_system_prompt["copilot_system_prompt (Super Prompt Canónico)"] {
+        varchar id PK "ID canónico del prompt"
+        text content "Texto completo del sistema con directivas"
+        varchar content_hash "Hash SHA-256 para verificación de integridad"
+        varchar version "Versión del prompt (v1, v2...)"
+        varchar schema_version "Versión de esquema destino (2.0.0)"
+        timestamptz updated_at "Momento de la última sincronización"
+    }
+
+    geom_projects ||--o{ projects_history : "project_id"
+    geom_projects ||--o{ events_history : "project_id"
+    geom_projects ||--o{ scene_snapshot : "thread_id"
+    knowledge_category ||--o{ knowledge_category : "parent_id"
+    knowledge_category ||--o{ knowledge_entry : "category_id"
+    knowledge_entry ||--o{ knowledge_revision : "entry_id"
