@@ -30,14 +30,6 @@ erDiagram
         timestamptz created_at "Timestamp del evento"
     }
 
-    scene_snapshot["scene_snapshot (Instantánea 3D por Hilo)"] {
-        bigserial id PK "ID del snapshot"
-        varchar thread_id FK "FK a geom_projects.id"
-        bigint revision "Número de revisión 3D"
-        jsonb scene_data "Grafo geométrico completo"
-        timestamptz created_at "Timestamp del snapshot"
-    }
-
     knowledge_category["knowledge_category (Taxonomía de Conocimiento)"] {
         varchar id PK "Identificador único de categoría"
         varchar parent_id FK "Autorreferencia jerárquica a categoría padre"
@@ -90,7 +82,6 @@ erDiagram
 
     geom_projects ||--o{ projects_history : "project_id"
     geom_projects ||--o{ events_history : "project_id"
-    geom_projects ||--o{ scene_snapshot : "thread_id"
     knowledge_category ||--o{ knowledge_category : "parent_id"
     knowledge_category ||--o{ knowledge_entry : "category_id"
     knowledge_entry ||--o{ knowledge_revision : "entry_id"
