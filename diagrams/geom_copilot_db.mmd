@@ -7,8 +7,9 @@ erDiagram
         varchar project_name "Nombre del Proyecto"
         text objective "Objetivo arquitectónico de la sesión"
         varchar status "IDLE | RUNNING | COMPLETED | FAILED"
-        varchar model "Modelo LLM (gpt-6-luna)"
+        varchar model "Modelo LLM por defecto"
         jsonb geom_memory "Memoria y contexto continuo sintetizado por el agente"
+        jsonb project_categories "Subcategorías convergentes del proyecto ([POSTFRAME, PORCH])"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Última actividad"
     }
@@ -25,50 +26,52 @@ erDiagram
         varchar project_id PK,FK "FK a geom_projects.id"
         int event_id PK "1...n secuencial independiente por proyecto"
         varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
+        varchar model_id FK "FK a llm_models.id (modelo usado en este turno)"
         jsonb message "Contenido íntegro estructurado (text, thought, ops)"
-        jsonb metadata "Telemetría y consumo (tokens, cache, latency, model)"
+        jsonb metadata "Telemetría y consumo (tokens, cache, latency)"
         timestamptz created_at "Timestamp del evento"
     }
 
-    knowledge_category["knowledge_category (Taxonomía de Conocimiento)"] {
-        varchar id PK "Identificador único de categoría"
-        varchar parent_id FK "Autorreferencia jerárquica a categoría padre"
-        varchar path UK "Ruta canónica slug (/carpentry/tables)"
-        varchar name "Nombre de la categoría"
-        text summary "Resumen del dominio constructivo"
-        varchar status "DRAFT | PUBLISHED | DEPRECATED"
-        int version "Versión de la categoría"
-        varchar scope "GLOBAL | WORKSPACE | PROJECT"
-        text provenance "Autoría y fuente de las reglas"
-        timestamptz created_at "Fecha de creación"
-        timestamptz updated_at "Fecha de actualización"
+    llm_models["llm_models (Catálogo de Modelos LLM)"] {
+        varchar id PK "gpt-4o | claude-3-5-sonnet | gemini-1-5-pro | deepseek-r1"
+        varchar name "Nombre comercial del modelo"
+        varchar provider "OPENAI | ANTHROPIC | GOOGLE | DEEPSEEK"
+        int max_tokens "Límite de tokens de contexto"
+        boolean is_active "Estado en el backend"
+        timestamptz created_at "Fecha de registro"
     }
 
-    knowledge_entry["knowledge_entry (Manifiestos y Reglas Paramétricas)"] {
-        varchar id PK "Identificador único de entrada"
+    knowledge_category["knowledge_category (Catálogo de Disciplinas)"] {
+        varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
+        varchar name "Nombre de la disciplina"
+        text description "Descripción técnica del dominio"
+        timestamptz created_at "Fecha de creación"
+    }
+
+    knowledge_subcategory["knowledge_subcategory (Catálogo de Tipologías Gobernadas)"] {
+        varchar id PK "Identificador único (POSTFRAME, GARAGE, DECK, PORCH, LEAN_TO, HOUSE)"
         varchar category_id FK "FK a knowledge_category.id"
-        varchar path UK "Ruta canónica única"
-        varchar name "Nombre de la regla o componente"
-        text summary "Resumen técnico de diseño"
-        jsonb content "Manifiesto geométrico y restricciones"
-        varchar status "DRAFT | PUBLISHED | ACTIVE"
-        int version "Versión de la regla"
+        varchar name "Nombre de la tipología constructiva"
+        text description "Descripción de la tipología"
         timestamptz created_at "Fecha de creación"
-        timestamptz updated_at "Fecha de actualización"
     }
 
-    knowledge_revision["knowledge_revision (Auditoría de Aprendizaje AI)"] {
-        bigserial id PK "ID secuencial de revisión"
-        varchar category_id "Referencia a categoría"
-        varchar entry_id "Referencia a entrada"
-        varchar path "Ruta en el momento de la revisión"
-        int version "Número de versión generada"
-        varchar status "Estado asignado"
-        text reason "Justificación del razonamiento sintetizado"
-        varchar source_thread_id "Hilo Learner que originó el cambio"
-        varchar model "Modelo que sintetizó el conocimiento"
-        jsonb content_snapshot "Snapshot completo del contenido JSONB"
-        timestamptz created_at "Momento de la revisión"
+    geom_knowledge["geom_knowledge (Cerebro Paramétrico Unificado)"] {
+        varchar id PK "Identificador único de conocimiento"
+        varchar category_id FK "FK a knowledge_category.id"
+        varchar sub_category_id FK "FK a knowledge_subcategory.id"
+        varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
+        varchar name "Nombre del conocimiento"
+        text summary "Resumen técnico de lo que cubre esta área"
+        varchar status "DRAFT | PUBLISHED | DEPRECATED"
+        int version "Versión incremental (1, 2, 3...)"
+        jsonb source "Array [project_id] de proyectos LEARNER contribuyentes"
+        jsonb model_template "Fase 1: Plantilla y jerarquía del modelo 3D inicial"
+        jsonb model_rules "Fase 2: Fórmulas y dependencias paramétricas"
+        jsonb model_inputs "Fase 3: Inputs de usuario y condiciones cruzadas"
+        varchar model_id FK "FK a llm_models.id (modelo que sintetizó)"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Fecha de actualización"
     }
 
     copilot_system_prompt["copilot_system_prompt (Super Prompt Canónico)"] {
@@ -82,6 +85,8 @@ erDiagram
 
     geom_projects ||--o{ projects_history : "project_id"
     geom_projects ||--o{ events_history : "project_id"
-    knowledge_category ||--o{ knowledge_category : "parent_id"
-    knowledge_category ||--o{ knowledge_entry : "category_id"
-    knowledge_entry ||--o{ knowledge_revision : "entry_id"
+    llm_models ||--o{ events_history : "model_id"
+    llm_models ||--o{ geom_knowledge : "model_id"
+    knowledge_category ||--o{ knowledge_subcategory : "category_id"
+    knowledge_category ||--o{ geom_knowledge : "category_id"
+    knowledge_subcategory ||--o{ geom_knowledge : "sub_category_id"
