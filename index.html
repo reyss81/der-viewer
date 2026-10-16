@@ -925,7 +925,7 @@
     orders_order ||--o| logistics_shipment : "order_id"`,
 
             geom: `erDiagram
-    geom_projects["geom_projects (Proyecto 3D y Estado del Agente)"] {
+    projects_projects["projects.projects (Proyecto 3D y Estado del Agente)"] {
         varchar id PK "ID único de conversación y proyecto"
         bigint tenant_id "ID de inquilino (default 0)"
         bigint user_id "ID de usuario propietario (default 0)"
@@ -940,25 +940,25 @@
         timestamptz updated_at "Última actividad"
     }
 
-    projects_history["projects_history (Últimas 10 Versiones por Proyecto)"] {
-        varchar project_id PK,FK "FK a geom_projects.id"
+    projects_history["projects.history (Últimas 10 Versiones por Proyecto)"] {
+        varchar project_id PK,FK "FK a projects.projects.id"
         bigint version_id PK "1...n incremental independiente por proyecto"
         varchar updated_by "USER | GEOM"
         jsonb project_data "Snapshot del AST geométrico en esta versión"
         timestamptz created_at "Momento del commit de la versión"
     }
 
-    events_history["events_history (Historial de Mensajes / Eventos)"] {
-        varchar project_id PK,FK "FK a geom_projects.id"
+    projects_events["projects.events (Historial de Mensajes / Eventos)"] {
+        varchar project_id PK,FK "FK a projects.projects.id"
         int event_id PK "1...n secuencial independiente por proyecto"
         varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
-        varchar model_id FK "FK a llm_models.id (modelo usado en este turno)"
+        varchar model_id FK "FK a system.llm_models.id (modelo usado en este turno)"
         jsonb message "Contenido íntegro estructurado (text, thought, ops)"
         jsonb metadata "Telemetría y consumo (tokens, cache, latency)"
         timestamptz created_at "Timestamp del evento"
     }
 
-    llm_models["llm_models (Catálogo de Modelos LLM)"] {
+    system_llm_models["system.llm_models (Catálogo de Modelos LLM)"] {
         varchar id PK "gpt-4o | claude-3-5-sonnet | gemini-1-5-pro | deepseek-r1"
         varchar name "Nombre comercial del modelo"
         varchar provider "OPENAI | ANTHROPIC | GOOGLE | DEEPSEEK"
@@ -967,24 +967,24 @@
         timestamptz created_at "Fecha de registro"
     }
 
-    knowledge_category["knowledge_category (Catálogo de Disciplinas)"] {
+    knowledge_categories["knowledge.categories (Catálogo de Disciplinas)"] {
         varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
         varchar name "Nombre de la disciplina"
         text description "Descripción técnica del dominio"
         timestamptz created_at "Fecha de creación"
     }
 
-    knowledge_subcategory["knowledge_subcategory (Catálogo de Tipologías Gobernadas)"] {
+    knowledge_subcategories["knowledge.subcategories (Catálogo de Tipologías Gobernadas)"] {
         varchar id PK "Identificador único (POSTFRAME, GARAGE, DECK, PORCH, LEAN_TO, HOUSE)"
-        varchar category_id FK "FK a knowledge_category.id"
+        varchar category_id FK "FK a knowledge.categories.id"
         varchar name "Nombre de la tipología constructiva"
         text description "Descripción de la tipología"
         timestamptz created_at "Fecha de creación"
     }
 
-    geom_knowledge["geom_knowledge (Cerebro Paramétrico Unificado)"] {
+    knowledge_rules["knowledge.rules (Cerebro Paramétrico Unificado)"] {
         varchar id PK "Identificador único de conocimiento"
-        varchar sub_category_id FK "FK directa a knowledge_subcategory.id"
+        varchar sub_category_id FK "FK directa a knowledge.subcategories.id"
         varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
         varchar name "Nombre del conocimiento"
         text summary "Resumen técnico de lo que cubre esta área"
@@ -994,12 +994,12 @@
         jsonb model_template "Fase 1: Plantilla y jerarquía del modelo 3D inicial"
         jsonb model_rules "Fase 2: Fórmulas y dependencias paramétricas"
         jsonb model_inputs "Fase 3: Inputs de usuario y condiciones cruzadas"
-        varchar model_id FK "FK a llm_models.id (modelo que sintetizó)"
+        varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Fecha de actualización"
     }
 
-    copilot_system_prompt["copilot_system_prompt (Super Prompt Canónico)"] {
+    system_prompts["system.prompts (Super Prompt Canónico)"] {
         varchar id PK "ID canónico del prompt"
         text content "Texto completo del sistema con directivas"
         varchar content_hash "Hash SHA-256 para verificación de integridad"
@@ -1008,12 +1008,12 @@
         timestamptz updated_at "Momento de la última sincronización"
     }
 
-    geom_projects ||--o{ projects_history : "project_id"
-    geom_projects ||--o{ events_history : "project_id"
-    llm_models ||--o{ events_history : "model_id"
-    llm_models ||--o{ geom_knowledge : "model_id"
-    knowledge_category ||--o{ knowledge_subcategory : "category_id"
-    knowledge_subcategory ||--o{ geom_knowledge : "sub_category_id"`
+    projects_projects ||--o{ projects_history : "project_id"
+    projects_projects ||--o{ projects_events : "project_id"
+    system_llm_models ||--o{ projects_events : "model_id"
+    system_llm_models ||--o{ knowledge_rules : "model_id"
+    knowledge_categories ||--o{ knowledge_subcategories : "category_id"
+    knowledge_subcategories ||--o{ knowledge_rules : "sub_category_id"`
         };
 
         let currentMermaidCode = PRESETS.geom;
