@@ -41,6 +41,28 @@ erDiagram
         timestamptz created_at "Fecha de registro"
     }
 
+    system_prompts["system.prompts (Super Prompt Canónico)"] {
+        varchar id PK "ID canónico del prompt"
+        text content "Texto completo del sistema con directivas"
+        varchar content_hash "Hash SHA-256 para verificación de integridad"
+        varchar version "Versión del prompt (v1, v2...)"
+        varchar schema_version "Versión de esquema destino (2.0.0)"
+        timestamptz updated_at "Momento de la última sincronización"
+    }
+
+    system_capabilities["system.capabilities (Catálogo de Capabilities y Tools)"] {
+        varchar id PK "knowledge_get | events_history_list | op_merge"
+        varchar driver "BACKEND | FRONT"
+        varchar mode "ALL | DESIGNER | LEARNER"
+        varchar name "Nombre legible de la capability"
+        text description "Guía semántica para el modelo"
+        jsonb parameters "JSON Schema para Function Calling"
+        jsonb example_call "Ejemplo canónico de llamada"
+        boolean is_active "Estado activo en el backend"
+        timestamptz created_at "Fecha de registro"
+        timestamptz updated_at "Última actualización"
+    }
+
     knowledge_categories["knowledge.categories (Catálogo de Disciplinas)"] {
         varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
         varchar name "Nombre de la disciplina"
@@ -71,15 +93,6 @@ erDiagram
         varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Fecha de actualización"
-    }
-
-    system_prompts["system.prompts (Super Prompt Canónico)"] {
-        varchar id PK "ID canónico del prompt"
-        text content "Texto completo del sistema con directivas"
-        varchar content_hash "Hash SHA-256 para verificación de integridad"
-        varchar version "Versión del prompt (v1, v2...)"
-        varchar schema_version "Versión de esquema destino (2.0.0)"
-        timestamptz updated_at "Momento de la última sincronización"
     }
 
     projects_projects ||--o{ projects_history : "project_id"

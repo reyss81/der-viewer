@@ -1008,6 +1008,19 @@
         timestamptz updated_at "Momento de la última sincronización"
     }
 
+    system_capabilities["system.capabilities (Catálogo de Capabilities y Tools)"] {
+        varchar id PK "knowledge_get | events_history_list | op_merge"
+        varchar driver "BACKEND | FRONT"
+        varchar mode "ALL | DESIGNER | LEARNER"
+        varchar name "Nombre legible de la capability"
+        text description "Guía semántica para el modelo"
+        jsonb parameters "JSON Schema para Function Calling"
+        jsonb example_call "Ejemplo canónico de llamada"
+        boolean is_active "Estado activo en el backend"
+        timestamptz created_at "Fecha de registro"
+        timestamptz updated_at "Última actualización"
+    }
+
     projects_projects ||--o{ projects_history : "project_id"
     projects_projects ||--o{ projects_events : "project_id"
     system_llm_models ||--o{ projects_events : "model_id"
