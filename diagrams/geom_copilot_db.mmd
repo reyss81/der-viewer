@@ -7,22 +7,33 @@ erDiagram
         varchar project_name "Nombre del Proyecto"
         text objective "Objetivo arquitectónico de la sesión"
         varchar status "IDLE | RUNNING | COMPLETED | FAILED"
-        varchar model "Modelo LLM activo (gpt-6-luna | gpt-6.1-sol)"
-        int version "Versión actual incremental del proyecto"
-        jsonb project_data "Snapshot del AST geométrico en esta versión"
-        jsonb history "Array JSONB histórico: [{version, updated_by, project_data, created_at}]"
+        varchar model_llm FK "FK a system.llm_models.id (gpt-6-luna | gpt-6.1-sol)"
+        varchar model_effort "Nivel de razonamiento preferido (low | medium | high | xhigh | max)"
+        varchar measurement_system "IMPERIAL | METRIC (Preferencia de unidades configurada en el proyecto)"
         jsonb geom_memory "Memoria y contexto continuo sintetizado por el agente"
-        jsonb project_subcategories "Subcategorías convergentes del proyecto ([POSTFRAME, PORCH])"
+        jsonb project_subcategories "Familias / subcategorías convergentes del proyecto ([POSTFRAME, PORCH])"
         jsonb permanent_files "Archivos preservados permanentemente (máx 10 y 50 MB)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Última actividad"
+    }
+
+    projects_history["projects.history (Últimas 10 Versiones por Proyecto)"] {
+        varchar project_id PK,FK "FK a projects.projects.id"
+        bigint version_id PK "1...n incremental independiente por proyecto"
+        varchar updated_by "USER | GEOM"
+        jsonb project_data "Snapshot del AST geométrico en esta versión"
+        varchar model_llm "Modelo LLM activo al generar el snapshot"
+        varchar model_effort "Nivel de razonamiento activo al generar el snapshot"
+        timestamptz created_at "Momento del commit de la versión"
     }
 
     projects_events["projects.events (Historial de Mensajes / Eventos)"] {
         varchar project_id PK,FK "FK a projects.projects.id"
         int event_id PK "1...n secuencial independiente por proyecto"
         varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
-        varchar model_id FK "FK a system.llm_models.id (modelo ejecutado en este turno)"
+        varchar model_llm FK "FK a system.llm_models.id (modelo ejecutado en este turno)"
+        varchar model_effort "Nivel de razonamiento ejecutado en este turno (low | medium | high | xhigh | max)"
+        varchar measurement_system "IMPERIAL | METRIC (Unidades activas en este turno)"
         jsonb message "Contenido íntegro estructurado (text, thought, ops)"
         jsonb metadata "Telemetría y consumo (tokens, cache, reasoningEffort, latency)"
         jsonb files "Archivos adjuntos temporales (sliding window 50 eventos)"
@@ -35,23 +46,23 @@ erDiagram
         varchar provider "OPENAI | ANTHROPIC | GOOGLE"
         int max_tokens "Límite de tokens de contexto (32768)"
         boolean is_active "Estado activo y conectado en el backend"
-        jsonb reasoning_efforts "Niveles de razonamiento admitidos ([low, medium, high, max...])"
-        varchar default_reasoning_effort "Nivel de razonamiento por defecto (medium)"
+        jsonb reasoning_efforts "Niveles de razonamiento admitidos ([low, medium, high, xhigh, max])"
+        varchar default_reasoning_effort "Nivel de razonamiento por defecto (low)"
         timestamptz created_at "Fecha de registro"
     }
 
     system_prompts["system.prompts (Super Prompt Canónico)"] {
-        varchar id PK "ID canónico del prompt"
-        text content "Texto completo del sistema con directivas (versión activa)"
+        varchar id PK "ID canónico del prompt (canonical)"
+        text content "Texto completo del sistema con directivas"
         varchar content_hash "Hash SHA-256 para verificación de integridad"
-        varchar version "Versión del prompt activa (v1, v2...)"
+        varchar version "Versión del prompt activa (v196...)"
         varchar schema_version "Versión de esquema destino (2.0.0)"
-        jsonb history "Array JSONB histórico: [{version, content, updated_at}]"
+        jsonb history "Arreglo inline de versiones previas [{version, content, updated_at}]"
         timestamptz updated_at "Momento de la última sincronización"
     }
 
     system_capabilities["system.capabilities (Catálogo de Capabilities y Tools)"] {
-        varchar id PK "db_query | db_schema | knowledge_get | op_merge"
+        varchar id PK "product_instantiate | product_save | product_get | db_query..."
         varchar driver "BACKEND | FRONT"
         varchar mode "ALL | DESIGNER | LEARNER"
         varchar name "Nombre legible de la capability"
@@ -63,44 +74,52 @@ erDiagram
         timestamptz updated_at "Última actualización"
     }
 
-    knowledge_categories["knowledge.categories (Catálogo de Disciplinas)"] {
-        varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
-        varchar name "Nombre de la disciplina"
-        text description "Descripción técnica del dominio"
-        int version "Versión actual de la categoría"
-        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
+    knowledge_areas["knowledge.areas (Catálogo de Áreas de Conocimiento)"] {
+        varchar id PK "Identificador canónico del área (STRUCTURES, FOUNDATIONS)"
+        varchar name "Nombre de la disciplina o área técnica"
+        text description "Descripción técnica del área"
+        int version "Versión incremental del área"
+        jsonb history "Arreglo inline de versiones previas [{version, name, description, updated_at}]"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última modificación"
+    }
+
+    knowledge_families["knowledge.families (Familias Paramétricas de Productos)"] {
+        varchar id PK "Código canónico de familia (CONPD, LVLBR, PFRAM...)"
+        varchar area_id FK "FK a knowledge.areas.id"
+        varchar name "Nombre genérico comercial de la familia"
+        text description "Descripción técnica de la familia"
+        varchar status "DRAFT | PUBLISHED | ARCHIVED"
+        int version "Versión incremental del conocimiento de familia"
+        jsonb definition "CONTRATO CANÓNICO (3 secciones: geometry, construction, estimation)"
+        jsonb history "Arreglo inline de versiones previas [{version, definition, updated_at}]"
+        varchar model_llm "Modelo LLM que definió o mutó la familia"
+        varchar model_effort "Nivel de razonamiento utilizado"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última modificación"
+    }
+
+    knowledge_products["knowledge.products (Catálogo Canónico de Productos)"] {
+        varchar code PK "Código canónico métrico (PK, ej. CONPD_RND16X04)"
+        varchar imp_code UK "Código comercial imperial (ej. CONPD_16X4)"
+        varchar family_code FK "FK a knowledge.families.id"
+        varchar name "Nombre en sistema métrico"
+        varchar imp_name "Nombre en sistema imperial"
+        text description "Descripción técnica métrica"
+        text imp_description "Descripción comercial imperial"
+        varchar status "DRAFT | PUBLISHED | ARCHIVED"
+        int version "Versión incremental del producto"
+        jsonb definition "CONTRATO CANÓNICO (5 secciones: meta, inputs, geometry, materials, estimation)"
+        jsonb history "Arreglo inline de versiones previas [{version, definition, updated_at}]"
+        varchar model_llm "Modelo LLM que definió o mutó el producto"
+        varchar model_effort "Nivel de razonamiento utilizado"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Última actualización"
     }
 
-    knowledge_subcategories["knowledge.subcategories (Catálogo de Tipologías Gobernadas)"] {
-        varchar id PK "Identificador único (POSTFRAME, GARAGE, DECK, PORCH, LEAN_TO, HOUSE)"
-        varchar category_id FK "FK a knowledge.categories.id"
-        varchar name "Nombre de la tipología constructiva"
-        text description "Descripción de la tipología"
-        int version "Versión actual de la tipología"
-        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
-        timestamptz created_at "Fecha de creación"
-        timestamptz updated_at "Última actualización"
-    }
-
-    knowledge_products["knowledge.products (Modelos Paramétricos y Productos)"] {
-        varchar id PK "Identificador único de producto o tipología constructiva"
-        varchar sub_category_id FK "FK directa a knowledge.subcategories.id"
-        varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
-        varchar name "Nombre del producto / tipología"
-        text summary "Resumen técnico de la tipología y capacidades"
-        varchar status "DRAFT | PUBLISHED | DEPRECATED"
-        int version "Versión actual del producto"
-        jsonb definition "Definición paramétrica activa (template, rules, inputs)"
-        jsonb history "Array JSONB histórico: [{version, definition, updated_at}]"
-        varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
-        timestamptz created_at "Fecha de creación"
-        timestamptz updated_at "Fecha de actualización"
-    }
-
+    projects_projects ||--o{ projects_history : "project_id"
     projects_projects ||--o{ projects_events : "project_id"
-    system_llm_models ||--o{ projects_events : "model_id"
-    system_llm_models ||--o{ knowledge_products : "model_id"
-    knowledge_categories ||--o{ knowledge_subcategories : "category_id"
-    knowledge_subcategories ||--o{ knowledge_products : "sub_category_id"
+    system_llm_models ||--o{ projects_projects : "model_llm"
+    system_llm_models ||--o{ projects_events : "model_llm"
+    knowledge_areas ||--o{ knowledge_families : "area_id"
+    knowledge_families ||--o{ knowledge_products : "family_code"
