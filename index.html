@@ -470,8 +470,18 @@
 
         /* Highlighting and Filtering classes */
         .entity-box {
-            transition: opacity 0.3s, filter 0.3s;
-            cursor: pointer;
+            transition: opacity 0.3s, filter 0.2s;
+            cursor: grab;
+        }
+
+        .entity-box:hover {
+            filter: drop-shadow(0 4px 16px rgba(56, 189, 248, 0.28));
+        }
+
+        .entity-box:active,
+        .entity-box.dragging {
+            cursor: grabbing !important;
+            filter: drop-shadow(0 12px 30px rgba(56, 189, 248, 0.55)) !important;
         }
 
         .dimmed {
@@ -611,15 +621,20 @@
         <button class="ctrl-btn" onclick="resetView()" title="Restablecer 100% [ 0 ]">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
+        <button class="ctrl-btn" onclick="resetLayout()" title="Restablecer Posición de Tablas [ R ]">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15"/></svg>
+        </button>
     </div>
 
     <!-- Bottom Shortcuts Guide -->
     <div class="quick-help">
-        <div class="shortcut-item"><span class="kbd">Rueda del Mouse</span> Zoom focal infinito (5% - 3500%)</div>
-        <div class="shortcut-item"><span class="kbd">Click + Arrastrar</span> Desplazar (Pan)</div>
+        <div class="shortcut-item"><span class="kbd">Rueda del Mouse</span> Zoom focal (5% - 3500%)</div>
+        <div class="shortcut-item"><span class="kbd">Click + Arrastrar</span> Desplazar Canvas</div>
+        <div class="shortcut-item"><span class="kbd">Arrastrar Tabla</span> Mover y redistribuir</div>
         <div class="shortcut-item"><span class="kbd">Click en Tabla</span> Inspeccionar Entidad</div>
+        <div class="shortcut-item"><span class="kbd">R</span> Reset Posiciones</div>
         <div class="shortcut-item"><span class="kbd">F</span> Auto-Ajustar</div>
-        <div class="shortcut-item"><span class="kbd">0</span> 100% Original</div>
+        <div class="shortcut-item"><span class="kbd">0</span> 100%</div>
     </div>
 
     <!-- Entity Inspector Drawer -->
@@ -933,83 +948,51 @@
         varchar project_name "Nombre del Proyecto"
         text objective "Objetivo arquitectónico de la sesión"
         varchar status "IDLE | RUNNING | COMPLETED | FAILED"
-        varchar model "Modelo LLM por defecto"
+        varchar model "Modelo LLM activo (gpt-6-luna | gpt-6.1-sol)"
+        int version "Versión actual incremental del proyecto"
+        jsonb project_data "Snapshot del AST geométrico en esta versión"
+        jsonb history "Array JSONB histórico: [{version, updated_by, project_data, created_at}]"
         jsonb geom_memory "Memoria y contexto continuo sintetizado por el agente"
         jsonb project_subcategories "Subcategorías convergentes del proyecto ([POSTFRAME, PORCH])"
+        jsonb permanent_files "Archivos preservados permanentemente (máx 10 y 50 MB)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Última actividad"
-    }
-
-    projects_history["projects.history (Últimas 10 Versiones por Proyecto)"] {
-        varchar project_id PK,FK "FK a projects.projects.id"
-        bigint version_id PK "1...n incremental independiente por proyecto"
-        varchar updated_by "USER | GEOM"
-        jsonb project_data "Snapshot del AST geométrico en esta versión"
-        timestamptz created_at "Momento del commit de la versión"
     }
 
     projects_events["projects.events (Historial de Mensajes / Eventos)"] {
         varchar project_id PK,FK "FK a projects.projects.id"
         int event_id PK "1...n secuencial independiente por proyecto"
         varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
-        varchar model_id FK "FK a system.llm_models.id (modelo usado en este turno)"
+        varchar model_id FK "FK a system.llm_models.id (modelo ejecutado en este turno)"
         jsonb message "Contenido íntegro estructurado (text, thought, ops)"
-        jsonb metadata "Telemetría y consumo (tokens, cache, latency)"
+        jsonb metadata "Telemetría y consumo (tokens, cache, reasoningEffort, latency)"
+        jsonb files "Archivos adjuntos temporales (sliding window 50 eventos)"
         timestamptz created_at "Timestamp del evento"
     }
 
-    system_llm_models["system.llm_models (Catálogo de Modelos LLM)"] {
-        varchar id PK "gpt-4o | claude-3-5-sonnet | gemini-1-5-pro | deepseek-r1"
-        varchar name "Nombre comercial del modelo"
-        varchar provider "OPENAI | ANTHROPIC | GOOGLE | DEEPSEEK"
-        int max_tokens "Límite de tokens de contexto"
-        boolean is_active "Estado en el backend"
+    system_llm_models["system.llm_models (Catálogo de Modelos LLM Conectados)"] {
+        varchar id PK "gpt-6-luna | gpt-6.1-sol (Modelos activos y verificados)"
+        varchar name "Nombre comercial (GPT-6 Luna, GPT-6.1 Sol)"
+        varchar provider "OPENAI | ANTHROPIC | GOOGLE"
+        int max_tokens "Límite de tokens de contexto (32768)"
+        boolean is_active "Estado activo y conectado en el backend"
+        jsonb reasoning_efforts "Niveles de razonamiento admitidos ([low, medium, high, max...])"
+        varchar default_reasoning_effort "Nivel de razonamiento por defecto (medium)"
         timestamptz created_at "Fecha de registro"
-    }
-
-    knowledge_categories["knowledge.categories (Catálogo de Disciplinas)"] {
-        varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
-        varchar name "Nombre de la disciplina"
-        text description "Descripción técnica del dominio"
-        timestamptz created_at "Fecha de creación"
-    }
-
-    knowledge_subcategories["knowledge.subcategories (Catálogo de Tipologías Gobernadas)"] {
-        varchar id PK "Identificador único (POSTFRAME, GARAGE, DECK, PORCH, LEAN_TO, HOUSE)"
-        varchar category_id FK "FK a knowledge.categories.id"
-        varchar name "Nombre de la tipología constructiva"
-        text description "Descripción de la tipología"
-        timestamptz created_at "Fecha de creación"
-    }
-
-    knowledge_rules["knowledge.rules (Cerebro Paramétrico Unificado)"] {
-        varchar id PK "Identificador único de conocimiento"
-        varchar sub_category_id FK "FK directa a knowledge.subcategories.id"
-        varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
-        varchar name "Nombre del conocimiento"
-        text summary "Resumen técnico de lo que cubre esta área"
-        varchar status "DRAFT | PUBLISHED | DEPRECATED"
-        int version "Versión incremental (1, 2, 3...)"
-        jsonb source "Array [project_id] de proyectos LEARNER contribuyentes"
-        jsonb model_template "Fase 1: Plantilla y jerarquía del modelo 3D inicial"
-        jsonb model_rules "Fase 2: Fórmulas y dependencias paramétricas"
-        jsonb model_inputs "Fase 3: Inputs de usuario y condiciones cruzadas"
-        varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
-        timestamptz created_at "Fecha de creación"
-        timestamptz updated_at "Fecha de actualización"
     }
 
     system_prompts["system.prompts (Super Prompt Canónico)"] {
         varchar id PK "ID canónico del prompt"
-        text content "Texto completo del sistema con directivas"
+        text content "Texto completo del sistema con directivas (versión activa)"
         varchar content_hash "Hash SHA-256 para verificación de integridad"
-        varchar version "Versión del prompt (v1, v2...)"
+        varchar version "Versión del prompt activa (v1, v2...)"
         varchar schema_version "Versión de esquema destino (2.0.0)"
+        jsonb history "Array JSONB histórico: [{version, content, updated_at}]"
         timestamptz updated_at "Momento de la última sincronización"
     }
 
     system_capabilities["system.capabilities (Catálogo de Capabilities y Tools)"] {
-        varchar id PK "knowledge_get | events_history_list | op_merge"
+        varchar id PK "db_query | db_schema | knowledge_get | op_merge"
         varchar driver "BACKEND | FRONT"
         varchar mode "ALL | DESIGNER | LEARNER"
         varchar name "Nombre legible de la capability"
@@ -1021,12 +1004,47 @@
         timestamptz updated_at "Última actualización"
     }
 
-    projects_projects ||--o{ projects_history : "project_id"
+    knowledge_categories["knowledge.categories (Catálogo de Disciplinas)"] {
+        varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
+        varchar name "Nombre de la disciplina"
+        text description "Descripción técnica del dominio"
+        int version "Versión actual de la categoría"
+        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última actualización"
+    }
+
+    knowledge_subcategories["knowledge.subcategories (Catálogo de Tipologías Gobernadas)"] {
+        varchar id PK "Identificador único (POSTFRAME, GARAGE, DECK, PORCH, LEAN_TO, HOUSE)"
+        varchar category_id FK "FK a knowledge.categories.id"
+        varchar name "Nombre de la tipología constructiva"
+        text description "Descripción de la tipología"
+        int version "Versión actual de la tipología"
+        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última actualización"
+    }
+
+    knowledge_products["knowledge.products (Modelos Paramétricos y Productos)"] {
+        varchar id PK "Identificador único de producto o tipología constructiva"
+        varchar sub_category_id FK "FK directa a knowledge.subcategories.id"
+        varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
+        varchar name "Nombre del producto / tipología"
+        text summary "Resumen técnico de la tipología y capacidades"
+        varchar status "DRAFT | PUBLISHED | DEPRECATED"
+        int version "Versión actual del producto"
+        jsonb definition "Definición paramétrica activa (template, rules, inputs)"
+        jsonb history "Array JSONB histórico: [{version, definition, updated_at}]"
+        varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
+        timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Fecha de actualización"
+    }
+
     projects_projects ||--o{ projects_events : "project_id"
     system_llm_models ||--o{ projects_events : "model_id"
-    system_llm_models ||--o{ knowledge_rules : "model_id"
+    system_llm_models ||--o{ knowledge_products : "model_id"
     knowledge_categories ||--o{ knowledge_subcategories : "category_id"
-    knowledge_subcategories ||--o{ knowledge_rules : "sub_category_id"`
+    knowledge_subcategories ||--o{ knowledge_products : "sub_category_id"`
         };
 
         let currentMermaidCode = PRESETS.geom;
@@ -1188,13 +1206,330 @@
                 const schema = parts.length > 1 ? parts[0] : 'default';
                 g.setAttribute('data-schema', schema);
                 g.setAttribute('data-table', tableName);
+            });
 
-                // Click to inspect
-                g.onclick = (e) => {
-                    e.stopPropagation();
-                    inspectEntity(tableName, g);
+            // Enable Interactive Drag & Drop and Dynamic Relationship Routing
+            setupTableDragAndDrop(svg);
+        }
+
+        let tableDragController = null;
+
+        function setupTableDragAndDrop(svg) {
+            if (!svg) return;
+
+            const entities = Array.from(svg.querySelectorAll('g[id^="entity-"]'));
+            const entityMap = new Map();
+
+            entities.forEach(g => {
+                const bbox = g.getBBox();
+                const transform = g.getAttribute('transform') || '';
+                let tx = 0, ty = 0;
+                const match = /translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/.exec(transform);
+                if (match) {
+                    tx = parseFloat(match[1]);
+                    ty = parseFloat(match[2]);
+                }
+
+                // Cache original calculated coordinates for Reset Layout
+                if (!g.hasAttribute('data-orig-tx')) {
+                    g.setAttribute('data-orig-tx', tx);
+                    g.setAttribute('data-orig-ty', ty);
+                }
+
+                const entityData = {
+                    g,
+                    id: g.id,
+                    name: g.getAttribute('data-table') || '',
+                    tx,
+                    ty,
+                    width: bbox.width || 200,
+                    height: bbox.height || 100
+                };
+                entityMap.set(g, entityData);
+            });
+
+            // Map relationship lines and their corresponding labels
+            const paths = Array.from(svg.querySelectorAll('path.relationshipLine'));
+            const labelBoxes = Array.from(svg.querySelectorAll('rect.relationshipLabelBox'));
+            const labelTexts = Array.from(svg.querySelectorAll('text.relationshipLabel'));
+
+            const relationships = paths.map((path, idx) => {
+                let pStart = { x: 0, y: 0 };
+                let pEnd = { x: 0, y: 0 };
+
+                try {
+                    const len = path.getTotalLength();
+                    if (len > 0) {
+                        pStart = path.getPointAtLength(0);
+                        pEnd = path.getPointAtLength(len);
+                    }
+                } catch (e) {
+                    const d = path.getAttribute('d') || '';
+                    const coords = Array.from(d.matchAll(/([-\d.]+)[,\s]+([-\d.]+)/g));
+                    if (coords.length >= 2) {
+                        pStart = { x: parseFloat(coords[0][1]), y: parseFloat(coords[0][2]) };
+                        pEnd = { x: parseFloat(coords[coords.length - 1][1]), y: parseFloat(coords[coords.length - 1][2]) };
+                    }
+                }
+
+                // Find closest entities to start and end points
+                let startEntity = null;
+                let endEntity = null;
+                let minStartDist = Infinity;
+                let minEndDist = Infinity;
+
+                entityMap.forEach(ent => {
+                    const dStart = distanceToBox(pStart.x, pStart.y, ent);
+                    const dEnd = distanceToBox(pEnd.x, pEnd.y, ent);
+                    if (dStart < minStartDist) { minStartDist = dStart; startEntity = ent; }
+                    if (dEnd < minEndDist) { minEndDist = dEnd; endEntity = ent; }
+                });
+
+                if (!path.hasAttribute('data-orig-d')) {
+                    path.setAttribute('data-orig-d', path.getAttribute('d') || '');
+                }
+
+                const labelBox = labelBoxes[idx] || null;
+                const labelText = labelTexts[idx] || null;
+
+                if (labelBox && !labelBox.hasAttribute('data-orig-x')) {
+                    labelBox.setAttribute('data-orig-x', labelBox.getAttribute('x') || '0');
+                    labelBox.setAttribute('data-orig-y', labelBox.getAttribute('y') || '0');
+                }
+                if (labelText && !labelText.hasAttribute('data-orig-x')) {
+                    labelText.setAttribute('data-orig-x', labelText.getAttribute('x') || '0');
+                    labelText.setAttribute('data-orig-y', labelText.getAttribute('y') || '0');
+                }
+
+                return {
+                    path,
+                    startEntity,
+                    endEntity,
+                    labelBox,
+                    labelText
                 };
             });
+
+            // Attach interactive dragging to each entity
+            entities.forEach(g => {
+                const entData = entityMap.get(g);
+                const tableName = g.getAttribute('data-table') || '';
+
+                let isDraggingTable = false;
+                let startPointerX = 0;
+                let startPointerY = 0;
+                let initialTx = 0;
+                let initialTy = 0;
+                let hasMoved = false;
+
+                g.onmousedown = (e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation(); // Stop canvas panning
+
+                    isDraggingTable = true;
+                    hasMoved = false;
+                    startPointerX = e.clientX;
+                    startPointerY = e.clientY;
+                    initialTx = entData.tx;
+                    initialTy = entData.ty;
+
+                    g.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                    closeInspector();
+
+                    // Bring entity group to front so it is not occluded by other tables
+                    if (g.parentNode) {
+                        g.parentNode.appendChild(g);
+                    }
+
+                    const onMouseMove = (moveEvt) => {
+                        if (!isDraggingTable) return;
+
+                        const screenDx = moveEvt.clientX - startPointerX;
+                        const screenDy = moveEvt.clientY - startPointerY;
+
+                        if (!hasMoved && Math.hypot(screenDx, screenDy) > 4) {
+                            hasMoved = true;
+                        }
+
+                        if (hasMoved) {
+                            const svgDx = screenDx / scale;
+                            const svgDy = screenDy / scale;
+
+                            entData.tx = initialTx + svgDx;
+                            entData.ty = initialTy + svgDy;
+
+                            g.setAttribute('transform', `translate(${entData.tx.toFixed(2)}, ${entData.ty.toFixed(2)})`);
+
+                            // Update all connected relationship lines elastically
+                            relationships.forEach(rel => {
+                                if (rel.startEntity === entData || rel.endEntity === entData) {
+                                    updateRelationshipGeometry(rel);
+                                }
+                            });
+                        }
+                    };
+
+                    const onMouseUp = () => {
+                        if (isDraggingTable) {
+                            isDraggingTable = false;
+                            g.classList.remove('dragging');
+                            document.body.style.cursor = '';
+                            window.removeEventListener('mousemove', onMouseMove);
+                            window.removeEventListener('mouseup', onMouseUp);
+
+                            if (!hasMoved) {
+                                // Plain click -> open inspector
+                                inspectEntity(tableName, g);
+                            }
+                        }
+                    };
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+                };
+            });
+
+            tableDragController = {
+                entityMap,
+                relationships
+            };
+        }
+
+        function distanceToBox(px, py, ent) {
+            const left = ent.tx;
+            const right = ent.tx + ent.width;
+            const top = ent.ty;
+            const bottom = ent.ty + ent.height;
+            const dx = Math.max(left - px, 0, px - right);
+            const dy = Math.max(top - py, 0, py - bottom);
+            return Math.hypot(dx, dy);
+        }
+
+        function getPerimeterAnchor(box, targetCenter) {
+            const cx = box.tx + box.width / 2;
+            const cy = box.ty + box.height / 2;
+            const dx = targetCenter.x - cx;
+            const dy = targetCenter.y - cy;
+            if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return { x: cx, y: cy };
+
+            const halfW = box.width / 2;
+            const halfH = box.height / 2;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            if (absDx * halfH > absDy * halfW) {
+                const x = dx > 0 ? box.tx + box.width : box.tx;
+                const y = cy + (dy * halfW) / absDx;
+                return { x, y };
+            } else {
+                const y = dy > 0 ? box.ty + box.height : box.ty;
+                const x = cx + (dx * halfH) / absDy;
+                return { x, y };
+            }
+        }
+
+        function updateRelationshipGeometry(rel) {
+            if (!rel.startEntity || !rel.endEntity) return;
+
+            const entA = rel.startEntity;
+            const entB = rel.endEntity;
+
+            // Handle self-referencing relationship
+            if (entA === entB) {
+                const p1 = { x: entA.tx + entA.width - 25, y: entA.ty };
+                const p2 = { x: entA.tx + entA.width, y: entA.ty + 25 };
+                const cx1 = p1.x;
+                const cy1 = p1.y - 40;
+                const cx2 = p2.x + 40;
+                const cy2 = p2.y;
+                rel.path.setAttribute('d', `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} C ${cx1.toFixed(2)} ${cy1.toFixed(2)}, ${cx2.toFixed(2)} ${cy2.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`);
+                return;
+            }
+
+            const centerA = { x: entA.tx + entA.width / 2, y: entA.ty + entA.height / 2 };
+            const centerB = { x: entB.tx + entB.width / 2, y: entB.ty + entB.height / 2 };
+
+            const p1 = getPerimeterAnchor(entA, centerB);
+            const p2 = getPerimeterAnchor(entB, centerA);
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const dist = Math.hypot(dx, dy);
+            const curveOffset = Math.min(dist * 0.45, 90);
+
+            let cx1, cy1, cx2, cy2;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+                const sign = dx >= 0 ? 1 : -1;
+                cx1 = p1.x + curveOffset * sign;
+                cy1 = p1.y;
+                cx2 = p2.x - curveOffset * sign;
+                cy2 = p2.y;
+            } else {
+                const sign = dy >= 0 ? 1 : -1;
+                cx1 = p1.x;
+                cy1 = p1.y + curveOffset * sign;
+                cx2 = p2.x;
+                cy2 = p2.y - curveOffset * sign;
+            }
+
+            rel.path.setAttribute('d', `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} C ${cx1.toFixed(2)} ${cy1.toFixed(2)}, ${cx2.toFixed(2)} ${cy2.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`);
+
+            // Position label at curve midpoint
+            if (rel.labelBox || rel.labelText) {
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+
+                if (rel.labelText) {
+                    rel.labelText.setAttribute('x', midX.toFixed(2));
+                    rel.labelText.setAttribute('y', (midY + 4).toFixed(2));
+                }
+                if (rel.labelBox) {
+                    const bw = parseFloat(rel.labelBox.getAttribute('width') || 40);
+                    const bh = parseFloat(rel.labelBox.getAttribute('height') || 14);
+                    rel.labelBox.setAttribute('x', (midX - bw / 2).toFixed(2));
+                    rel.labelBox.setAttribute('y', (midY - bh / 2).toFixed(2));
+                }
+            }
+        }
+
+        function resetLayout() {
+            const svg = plane.querySelector('svg');
+            if (!svg) return;
+
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+            entities.forEach(g => {
+                const origTx = g.getAttribute('data-orig-tx');
+                const origTy = g.getAttribute('data-orig-ty');
+                if (origTx !== null && origTy !== null) {
+                    g.setAttribute('transform', `translate(${origTx}, ${origTy})`);
+                }
+            });
+
+            const paths = svg.querySelectorAll('path.relationshipLine');
+            paths.forEach(p => {
+                const origD = p.getAttribute('data-orig-d');
+                if (origD) p.setAttribute('d', origD);
+            });
+
+            const labelBoxes = svg.querySelectorAll('rect.relationshipLabelBox');
+            labelBoxes.forEach(r => {
+                const ox = r.getAttribute('data-orig-x');
+                const oy = r.getAttribute('data-orig-y');
+                if (ox !== null) r.setAttribute('x', ox);
+                if (oy !== null) r.setAttribute('y', oy);
+            });
+
+            const labelTexts = svg.querySelectorAll('text.relationshipLabel');
+            labelTexts.forEach(t => {
+                const ox = t.getAttribute('data-orig-x');
+                const oy = t.getAttribute('data-orig-y');
+                if (ox !== null) t.setAttribute('x', ox);
+                if (oy !== null) t.setAttribute('y', oy);
+            });
+
+            setupTableDragAndDrop(svg);
+            fitView();
         }
 
         function generateDynamicFilters() {
@@ -1346,12 +1681,36 @@
             const svg = plane.querySelector('svg');
             if (!svg) return;
 
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const entities = svg.querySelectorAll('g[id^="entity-"]');
+
+            if (entities.length > 0) {
+                entities.forEach(g => {
+                    const bbox = g.getBBox();
+                    const transform = g.getAttribute('transform') || '';
+                    const match = /translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/.exec(transform);
+                    const tx = match ? parseFloat(match[1]) : 0;
+                    const ty = match ? parseFloat(match[2]) : 0;
+                    const w = bbox.width > 0 ? bbox.width : 200;
+                    const h = bbox.height > 0 ? bbox.height : 100;
+                    minX = Math.min(minX, tx);
+                    minY = Math.min(minY, ty);
+                    maxX = Math.max(maxX, tx + w);
+                    maxY = Math.max(maxY, ty + h);
+                });
+            }
+
             let width = 0;
             let height = 0;
             let x = 0;
             let y = 0;
 
-            if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
+            if (isFinite(minX) && isFinite(minY) && isFinite(maxX) && isFinite(maxY) && (maxX - minX) > 0 && (maxY - minY) > 0) {
+                width = maxX - minX;
+                height = maxY - minY;
+                x = minX;
+                y = minY;
+            } else if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
                 width = svg.viewBox.baseVal.width;
                 height = svg.viewBox.baseVal.height;
                 x = svg.viewBox.baseVal.x || 0;
@@ -1388,6 +1747,7 @@
             else if (e.key === '-' || e.key === '_') zoomOut();
             else if (e.key === '0') resetView();
             else if (e.key.toLowerCase() === 'f') fitView();
+            else if (e.key.toLowerCase() === 'r') resetLayout();
             else if (e.key === 'Escape') { closeInspector(); closeEditorModal(); }
         });
 
@@ -1476,8 +1836,43 @@
         function exportSvg() {
             const svg = plane.querySelector('svg');
             if (!svg) return;
+
+            const clone = svg.cloneNode(true);
+
+            // Compute dynamic bounding box encompassing any dragged/repositioned tables
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const entities = clone.querySelectorAll('g[id^="entity-"]');
+            if (entities.length > 0) {
+                entities.forEach(g => {
+                    const transform = g.getAttribute('transform') || '';
+                    const match = /translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/.exec(transform);
+                    const tx = match ? parseFloat(match[1]) : 0;
+                    const ty = match ? parseFloat(match[2]) : 0;
+                    const rect = g.querySelector('rect');
+                    const w = rect ? parseFloat(rect.getAttribute('width') || 250) : 250;
+                    const h = rect ? parseFloat(rect.getAttribute('height') || 150) : 150;
+                    minX = Math.min(minX, tx);
+                    minY = Math.min(minY, ty);
+                    maxX = Math.max(maxX, tx + w);
+                    maxY = Math.max(maxY, ty + h);
+                });
+            }
+
+            if (isFinite(minX) && isFinite(minY) && isFinite(maxX) && isFinite(maxY) && (maxX - minX) > 0 && (maxY - minY) > 0) {
+                const padding = 50;
+                const exportX = minX - padding;
+                const exportY = minY - padding;
+                const exportW = (maxX - minX) + padding * 2;
+                const exportH = (maxY - minY) + padding * 2;
+                clone.setAttribute('viewBox', `${exportX} ${exportY} ${exportW} ${exportH}`);
+                clone.setAttribute('width', exportW);
+                clone.setAttribute('height', exportH);
+                clone.style.width = exportW + 'px';
+                clone.style.height = exportH + 'px';
+            }
+
             const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svg);
+            let source = serializer.serializeToString(clone);
             if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
                 source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
             }

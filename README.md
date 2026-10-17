@@ -8,11 +8,13 @@ Una herramienta web moderna, independiente y sin dependencias de servidor (cero 
 
 * 🔍 **Zoom Focal Infinito (5% al 3500%):** Centrado dinámico con la rueda del ratón en la coordenada exacta del cursor.
 * ✋ **Desplazamiento Libre (Pan):** Arrastre de lienzo ultra fluido con aceleración por GPU.
+* 🔀 **Drag & Drop de Tablas en Tiempo Real:** Arrastra cualquier tabla para reorganizar la disposición visual a tu gusto. Las líneas de relación (*Foreign Keys*) se recalculan y adaptan elásticamente a 60 FPS con curvas Bezier y etiquetas sincronizadas.
+* 🔄 **Restablecimiento Inteligente de Layout:** Botón dedicado y atajo `R` para volver instantáneamente a la disposición original calculada por Mermaid.
 * 🔎 **Buscador Dinámico:** Resalta tablas y columnas con brillo cian neón en tiempo real y atenúa el resto del diagrama.
 * 🏷️ **Filtros Automáticos de Dominio:** Detecta automáticamente los esquemas (`auth`, `tenants`, `billing`, `projects`, etc.) y genera botones de aislamiento por módulo en la barra superior.
 * 📋 **Inspector de Entidades:** Haz clic sobre cualquier tabla para ver su ficha técnica detallada (esquema, tipos de datos, PKs, FKs, UKs) en un panel lateral deslizante.
 * 💾 **Exportación Vectorial:**
-  * Descarga directa en **SVG Vectorial** limpio y escalable para documentación o presentaciones.
+  * Descarga directa en **SVG Vectorial** limpio y escalable que preserva fielmente cualquier redistribución personalizada de tablas.
   * Copia del código fuente Mermaid al portapapeles con un clic.
 * ⚡ **Editor y Carga en Vivo:** Pega cualquier código Mermaid ERD o sube archivos `.mmd` desde la interfaz sin recargar la página.
 * 🛡️ **100% Estático y Privado:** Todo el procesamiento ocurre en el navegador local (Client-Side). Ningún dato ni estructura viaja a ningún servidor externo.
@@ -76,11 +78,13 @@ Este script crea 5 esquemas relacionales completos con extensiones UUID, claves 
 | Tecla / Acción | Función |
 | :--- | :--- |
 | **Rueda del Ratón** | Zoom focal hacia / desde la posición del cursor |
-| **Click + Arrastrar** | Desplazar el lienzo (Pan) |
+| **Click + Arrastrar Canvas** | Desplazar el lienzo (Pan) |
+| **Arrastrar Tabla** | Mover y redistribuir tablas en tiempo real con cables dinámicos |
 | **Click en Tabla** | Abrir inspector de columnas y restricciones |
+| **`R`** | Restablecer la posición de las tablas al layout original |
 | **`+` o `=`** | Acercar vista |
 | **`-` o `_`** | Alejar vista |
-| **`F`** | Auto-ajustar diagrama completo a la pantalla |
+| **`F`** | Auto-ajustar diagrama completo a la pantalla (calculado con tablas movidas) |
 | **`0`** | Restablecer vista al 100% |
 | **`Escape`** | Cerrar inspector o modal de edición |
 

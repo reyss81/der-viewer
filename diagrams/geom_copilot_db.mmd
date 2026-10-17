@@ -7,46 +7,46 @@ erDiagram
         varchar project_name "Nombre del Proyecto"
         text objective "Objetivo arquitectónico de la sesión"
         varchar status "IDLE | RUNNING | COMPLETED | FAILED"
-        varchar model "Modelo LLM por defecto"
+        varchar model "Modelo LLM activo (gpt-6-luna | gpt-6.1-sol)"
+        int version "Versión actual incremental del proyecto"
+        jsonb project_data "Snapshot del AST geométrico en esta versión"
+        jsonb history "Array JSONB histórico: [{version, updated_by, project_data, created_at}]"
         jsonb geom_memory "Memoria y contexto continuo sintetizado por el agente"
         jsonb project_subcategories "Subcategorías convergentes del proyecto ([POSTFRAME, PORCH])"
+        jsonb permanent_files "Archivos preservados permanentemente (máx 10 y 50 MB)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Última actividad"
-    }
-
-    projects_history["projects.history (Últimas 10 Versiones por Proyecto)"] {
-        varchar project_id PK,FK "FK a projects.projects.id"
-        bigint version_id PK "1...n incremental independiente por proyecto"
-        varchar updated_by "USER | GEOM"
-        jsonb project_data "Snapshot del AST geométrico en esta versión"
-        timestamptz created_at "Momento del commit de la versión"
     }
 
     projects_events["projects.events (Historial de Mensajes / Eventos)"] {
         varchar project_id PK,FK "FK a projects.projects.id"
         int event_id PK "1...n secuencial independiente por proyecto"
         varchar owner "USER_MESSAGE | GEOM_MESSAGE | TOOL_EXECUTION"
-        varchar model_id FK "FK a system.llm_models.id (modelo usado en este turno)"
+        varchar model_id FK "FK a system.llm_models.id (modelo ejecutado en este turno)"
         jsonb message "Contenido íntegro estructurado (text, thought, ops)"
-        jsonb metadata "Telemetría y consumo (tokens, cache, latency)"
+        jsonb metadata "Telemetría y consumo (tokens, cache, reasoningEffort, latency)"
+        jsonb files "Archivos adjuntos temporales (sliding window 50 eventos)"
         timestamptz created_at "Timestamp del evento"
     }
 
-    system_llm_models["system.llm_models (Catálogo de Modelos LLM)"] {
-        varchar id PK "gpt-4o | claude-3-5-sonnet | gemini-1-5-pro | deepseek-r1"
-        varchar name "Nombre comercial del modelo"
-        varchar provider "OPENAI | ANTHROPIC | GOOGLE | DEEPSEEK"
-        int max_tokens "Límite de tokens de contexto"
-        boolean is_active "Estado en el backend"
+    system_llm_models["system.llm_models (Catálogo de Modelos LLM Conectados)"] {
+        varchar id PK "gpt-6-luna | gpt-6.1-sol (Modelos activos y verificados)"
+        varchar name "Nombre comercial (GPT-6 Luna, GPT-6.1 Sol)"
+        varchar provider "OPENAI | ANTHROPIC | GOOGLE"
+        int max_tokens "Límite de tokens de contexto (32768)"
+        boolean is_active "Estado activo y conectado en el backend"
+        jsonb reasoning_efforts "Niveles de razonamiento admitidos ([low, medium, high, max...])"
+        varchar default_reasoning_effort "Nivel de razonamiento por defecto (medium)"
         timestamptz created_at "Fecha de registro"
     }
 
     system_prompts["system.prompts (Super Prompt Canónico)"] {
         varchar id PK "ID canónico del prompt"
-        text content "Texto completo del sistema con directivas"
+        text content "Texto completo del sistema con directivas (versión activa)"
         varchar content_hash "Hash SHA-256 para verificación de integridad"
-        varchar version "Versión del prompt (v1, v2...)"
+        varchar version "Versión del prompt activa (v1, v2...)"
         varchar schema_version "Versión de esquema destino (2.0.0)"
+        jsonb history "Array JSONB histórico: [{version, content, updated_at}]"
         timestamptz updated_at "Momento de la última sincronización"
     }
 
@@ -67,7 +67,10 @@ erDiagram
         varchar id PK "Identificador único de categoría (STRUCTURES, WOODWORKING)"
         varchar name "Nombre de la disciplina"
         text description "Descripción técnica del dominio"
+        int version "Versión actual de la categoría"
+        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
         timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última actualización"
     }
 
     knowledge_subcategories["knowledge.subcategories (Catálogo de Tipologías Gobernadas)"] {
@@ -75,29 +78,29 @@ erDiagram
         varchar category_id FK "FK a knowledge.categories.id"
         varchar name "Nombre de la tipología constructiva"
         text description "Descripción de la tipología"
+        int version "Versión actual de la tipología"
+        jsonb history "Array JSONB histórico: [{version, name, description, updated_at}]"
         timestamptz created_at "Fecha de creación"
+        timestamptz updated_at "Última actualización"
     }
 
-    knowledge_rules["knowledge.rules (Cerebro Paramétrico Unificado)"] {
-        varchar id PK "Identificador único de conocimiento"
+    knowledge_products["knowledge.products (Modelos Paramétricos y Productos)"] {
+        varchar id PK "Identificador único de producto o tipología constructiva"
         varchar sub_category_id FK "FK directa a knowledge.subcategories.id"
         varchar path UK "Ruta canónica slug (/structures/postframe/garage)"
-        varchar name "Nombre del conocimiento"
-        text summary "Resumen técnico de lo que cubre esta área"
+        varchar name "Nombre del producto / tipología"
+        text summary "Resumen técnico de la tipología y capacidades"
         varchar status "DRAFT | PUBLISHED | DEPRECATED"
-        int version "Versión incremental (1, 2, 3...)"
-        jsonb source "Array [project_id] de proyectos LEARNER contribuyentes"
-        jsonb model_template "Fase 1: Plantilla y jerarquía del modelo 3D inicial"
-        jsonb model_rules "Fase 2: Fórmulas y dependencias paramétricas"
-        jsonb model_inputs "Fase 3: Inputs de usuario y condiciones cruzadas"
+        int version "Versión actual del producto"
+        jsonb definition "Definición paramétrica activa (template, rules, inputs)"
+        jsonb history "Array JSONB histórico: [{version, definition, updated_at}]"
         varchar model_id FK "FK a system.llm_models.id (modelo que sintetizó)"
         timestamptz created_at "Fecha de creación"
         timestamptz updated_at "Fecha de actualización"
     }
 
-    projects_projects ||--o{ projects_history : "project_id"
     projects_projects ||--o{ projects_events : "project_id"
     system_llm_models ||--o{ projects_events : "model_id"
-    system_llm_models ||--o{ knowledge_rules : "model_id"
+    system_llm_models ||--o{ knowledge_products : "model_id"
     knowledge_categories ||--o{ knowledge_subcategories : "category_id"
-    knowledge_subcategories ||--o{ knowledge_rules : "sub_category_id"
+    knowledge_subcategories ||--o{ knowledge_products : "sub_category_id"
